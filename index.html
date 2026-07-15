@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sailing Log</title>
+<!-- Sailing Log — v1 -->
+<meta name="app" content="sailing-log" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --navy:#0b2942; --navy2:#123a5c; --steel:#3d6a92; --sky:#7fb3d5;
+    --foam:#eaf2f8; --sand:#f4efe6; --line:#d8e2ea; --ink:#12222f;
+    --accent:#e8743b; --ok:#2e9e6b; --muted:#6f8598; --card:#ffffff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--foam); height:100vh; overflow:hidden}
+  button{font-family:inherit}
+
+  /* ---------- top bar ---------- */
+  #topbar{
+    height:56px; display:flex; align-items:center; gap:18px; padding:0 20px;
+    background:linear-gradient(90deg,var(--navy),var(--navy2)); color:#eaf2f8; border-bottom:1px solid rgba(0,0,0,.2);
+  }
+  #topbar .brand{display:flex; align-items:center; gap:9px; font-size:17px; font-weight:700; letter-spacing:.3px}
+  #topbar .wheel{width:22px; height:22px}
+  #nav{display:flex; gap:4px; margin-left:6px}
+  #nav button{
+    background:transparent; color:var(--sky); border:none; border-radius:8px; padding:8px 13px;
+    font-size:13px; font-weight:600; cursor:pointer; transition:.12s;
+  }
+  #nav button:hover{background:rgba(255,255,255,.08); color:#fff}
+  #nav button.active{background:rgba(127,179,213,.22); color:#fff}
+  #topbar .spacer{flex:1}
+  #boatname{font-size:13px; color:var(--sky)}
+
+  #views{height:calc(100vh - 56px); position:relative}
+  .view{position:absolute; inset:0; overflow:auto}
+  .view.hidden{display:none !important}
+
+  /* ---------- voyages ---------- */
+  #view-voyages{display:grid; grid-template-columns:330px 1fr; overflow:hidden}
+  #sidebar{background:linear-gradient(180deg,var(--navy),var(--navy2)); color:#eaf2f8; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid rgba(0,0,0,.2)}
+  .drop{margin:14px; padding:20px 16px; border:2px dashed rgba(127,179,213,.5); border-radius:12px; text-align:center; cursor:pointer; transition:.15s; background:rgba(255,255,255,.03)}
+  .drop:hover,.drop.drag{background:rgba(127,179,213,.14); border-color:var(--sky)}
+  .drop .big{font-size:13px; font-weight:600}
+  .drop .small{font-size:11px; color:var(--sky); margin-top:4px}
+  .drop svg{opacity:.85; margin-bottom:6px}
+  .listhead{padding:6px 18px; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--sky); display:flex; justify-content:space-between; align-items:center}
+  .lh-actions{display:flex; gap:6px}
+  .lh-actions button{background:rgba(255,255,255,.08); color:var(--sky); border:1px solid rgba(255,255,255,.12); border-radius:6px; padding:3px 8px; font-size:10px; letter-spacing:.4px; text-transform:uppercase; cursor:pointer; transition:.12s}
+  .lh-actions button:hover{background:rgba(127,179,213,.25); color:#fff}
+  .sortrow{display:flex; align-items:center; gap:8px; padding:2px 18px 8px; font-size:11px; color:var(--sky)}
+  .sortrow label{text-transform:uppercase; letter-spacing:.6px}
+  .sortrow select{flex:1; background:rgba(255,255,255,.08); color:#eaf2f8; border:1px solid rgba(255,255,255,.14); border-radius:6px; padding:5px 8px; font-size:12px; cursor:pointer}
+  .sortrow select option{color:#12222f}
+  .mini-btn{width:100%; background:rgba(255,255,255,.08); color:var(--sky); border:1px solid rgba(255,255,255,.14); border-radius:6px; padding:6px 8px; font-size:11px; cursor:pointer; transition:.12s}
+  .mini-btn:hover{background:rgba(127,179,213,.25); color:#fff}
+  .grouphdr{list-style:none; display:flex; align-items:center; gap:8px; padding:10px 8px 4px; cursor:pointer}
+  .grouphdr .gh-tw{color:var(--sky); font-size:10px; width:12px; flex:none; text-align:center}
+  .grouphdr .gh-main{min-width:0}
+  .grouphdr .gh-name{font-size:12px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.5px; overflow-wrap:anywhere}
+  .grouphdr .gh-sub{font-size:10px; color:var(--sky); margin-top:1px}
+  .grouphdr:hover .gh-name{color:var(--sky)}
+  .trip.dragging{opacity:.4}
+  .trip.drop-target{outline:2px dashed var(--sky); outline-offset:-2px; background:rgba(127,179,213,.18)}
+  .grouphdr.drop-target{outline:2px dashed var(--sky); outline-offset:-2px; background:rgba(127,179,213,.18); border-radius:8px}
+  .cat-head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:22px}
+  .cat-head h1{margin:0}
+  .cat-empty{text-align:center; padding:64px 20px; color:var(--muted)}
+  .cat-empty .ce-ic{font-size:40px; opacity:.45}
+  .cat-empty .ce-t{font-size:18px; font-weight:700; color:var(--navy); margin-top:12px}
+  .cat-empty .ce-s{font-size:13px; margin-top:6px; max-width:420px; margin-left:auto; margin-right:auto}
+  .vcard{position:relative; display:flex; background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 6px 22px rgba(11,41,66,.07); margin-bottom:18px; transition:box-shadow .15s, transform .15s}
+  .vcard:hover{box-shadow:0 12px 32px rgba(11,41,66,.13)}
+  .vcard-accent{width:6px; flex:none; background:linear-gradient(180deg,var(--steel),var(--sky))}
+  .vcard.unassigned .vcard-accent{background:var(--line)}
+  .vcard-body{flex:1; padding:20px 24px; min-width:0}
+  .vcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
+  .vcard-name{font-size:21px; font-weight:800; color:var(--navy); letter-spacing:-.3px}
+  .vcard-date{font-size:12px; color:var(--muted); margin-top:3px; letter-spacing:.2px}
+  .vcard-actions{display:flex; gap:6px; flex:none}
+  .icb{width:34px; height:34px; border:1px solid var(--line); background:#fff; border-radius:10px; cursor:pointer; font-size:15px; color:var(--steel); display:flex; align-items:center; justify-content:center; transition:.12s}
+  .icb:hover{background:var(--foam); color:var(--navy)}
+  .icb.danger:hover{background:#fbecea; color:#c0392b; border-color:#e6c3bd}
+  .vcard-stats{display:flex; gap:34px; margin:16px 0 6px; padding:14px 2px; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+  .vs-v{font-size:21px; font-weight:800; color:var(--navy); line-height:1}
+  .vs-v em{font-size:12px; font-weight:600; color:var(--muted); font-style:normal; margin-left:3px}
+  .vs-k{font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-top:5px}
+  .leglist{list-style:none; margin:10px 0 0; padding:0}
+  .legrow{display:flex; align-items:center; gap:12px; padding:10px 8px; border-radius:10px; cursor:grab; transition:background .12s}
+  .legrow:hover{background:var(--foam)}
+  .legrow.dragging{opacity:.4}
+  .legrow .grip{color:#c9d6e0; font-size:14px; flex:none}
+  .legrow:hover .grip{color:var(--muted)}
+  .legno{flex:none; width:24px; height:24px; border-radius:50%; background:var(--navy); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .vcard.unassigned .legno{background:var(--muted)}
+  .leginfo{flex:1; min-width:0}
+  .legname{font-weight:600; color:var(--ink); font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .legdate{font-size:11px; color:var(--muted); margin-top:1px}
+  .legstats{display:flex; flex-direction:column; align-items:flex-end; gap:1px; flex:none}
+  .legstats span:first-child{font-weight:700; color:var(--navy); font-size:14px}
+  .legstats span:last-child{font-size:11px; color:var(--muted)}
+  .legrow-empty{color:var(--muted); font-size:13px; padding:10px 8px}
+  .vcard.drop-target{box-shadow:0 0 0 3px var(--sky), 0 12px 32px rgba(11,41,66,.13); background:#f5fafd}
+  #tripList{list-style:none; overflow-y:auto; flex:1; padding:4px 10px 16px}
+  .trip{background:rgba(255,255,255,.05); border:1px solid transparent; border-radius:10px; padding:11px 12px; margin:6px 0; cursor:pointer; transition:.12s; position:relative}
+  .trip:hover{background:rgba(255,255,255,.1)}
+  .trip.active{background:rgba(127,179,213,.2); border-color:var(--sky)}
+  .trip .name{display:flex; align-items:center; gap:7px; font-size:14px; font-weight:600; padding-right:48px}
+  .trip .name .txt{min-width:0; overflow-wrap:anywhere}
+  .trip .meta{font-size:11px; color:var(--sky); margin-top:3px}
+  .trip .badges{margin-top:5px; display:flex; gap:5px; flex-wrap:wrap}
+  .trip .badge{font-size:9px; background:rgba(127,179,213,.2); color:#cfe4f2; padding:2px 6px; border-radius:10px; letter-spacing:.3px}
+  .trip .del{position:absolute; top:8px; right:8px; width:20px; height:20px; border:none; border-radius:5px; background:transparent; color:var(--sky); cursor:pointer; font-size:15px; line-height:1; opacity:0; transition:.12s}
+  .trip:hover .del{opacity:1}
+  .trip .del:hover{background:rgba(232,116,59,.85); color:#fff}
+  .trip .ren{position:absolute; top:8px; right:30px; width:20px; height:20px; border:none; border-radius:5px; background:transparent; color:var(--sky); cursor:pointer; font-size:12px; line-height:1; opacity:0; transition:.12s}
+  .trip:hover .ren{opacity:1}
+  .trip .ren:hover{background:rgba(127,179,213,.35); color:#fff}
+  .renameInput{width:100%; font-size:14px; font-weight:600; padding:2px 5px; border-radius:5px; border:1px solid var(--sky); background:#fff; color:var(--ink)}
+  .combine-row{display:flex; align-items:center; gap:7px; margin:-4px 14px 8px; font-size:11px; color:var(--sky); cursor:pointer}
+  .combine-row input{accent-color:#7fb3d5}
+  .chip{flex:none; display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle}
+  .empty{color:var(--sky); font-size:12px; text-align:center; padding:24px 12px; opacity:.8}
+  .foot{padding:9px 18px; font-size:10px; color:var(--sky); border-top:1px solid rgba(255,255,255,.08); opacity:.75}
+
+  #mapWrap{position:relative}
+  #map{position:absolute; inset:0}
+  .leaflet-container{background:#c9dced}
+
+  #stats{position:absolute; top:14px; left:14px; z-index:600; width:272px; background:rgba(255,255,255,.96); backdrop-filter:blur(6px); border-radius:14px; box-shadow:0 8px 30px rgba(11,41,66,.22); overflow:hidden; border:1px solid var(--line)}
+  #stats.hidden{display:none}
+  .st-head{background:linear-gradient(90deg,var(--navy),var(--steel)); color:#fff; padding:12px 15px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px}
+  .st-head .t{font-size:15px; font-weight:700}
+  .st-head .d{font-size:11px; color:var(--sky); margin-top:2px}
+  .st-head .play{flex:none; background:rgba(255,255,255,.16); border:none; color:#fff; width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:14px; transition:.12s}
+  .st-head .play:hover{background:rgba(255,255,255,.3)}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line)}
+  .cell{background:#fff; padding:10px 14px}
+  .cell .v{font-size:19px; font-weight:700; color:var(--navy)}
+  .cell .v span{font-size:11px; font-weight:600; color:var(--muted)}
+  .cell .k{font-size:10px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-top:1px}
+  .route{padding:10px 14px; background:#fff; font-size:11px; color:var(--muted); border-top:1px solid var(--line); line-height:1.5}
+  .route b{color:var(--ink); font-weight:600}
+  .thr{padding:8px 14px; font-size:11px; color:var(--muted); background:#fff; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px}
+  .thr input[type=range]{flex:1}
+  .thr b{color:var(--navy); font-weight:700}
+  #stats.multi .single-only{display:none}
+  .leaflet-tooltip.trk-tip{background:#0b2942; color:#eaf2f8; border:1px solid rgba(127,179,213,.4); box-shadow:0 6px 18px rgba(0,0,0,.35); border-radius:9px; padding:8px 11px; font-size:11px; white-space:nowrap}
+  .leaflet-tooltip.trk-tip::before{display:none}
+  .trk-tip .tt-h{font-weight:700; color:#fff; margin-bottom:5px; font-size:12px}
+  .trk-tip .tt-r{display:flex; justify-content:space-between; gap:16px; line-height:1.55}
+  .trk-tip .tt-r span{color:#7fb3d5}
+  .trk-tip .tt-r b{color:#fff; font-weight:600}
+  .st-actions{display:flex; border-top:1px solid var(--line)}
+  .st-actions button{flex:1; background:#fff; border:none; padding:10px; font-size:12px; font-weight:600; color:var(--steel); cursor:pointer; transition:.12s}
+  .st-actions button:hover{background:var(--foam)}
+
+  #legend{position:absolute; bottom:22px; left:14px; z-index:600; background:rgba(255,255,255,.95); border-radius:10px; padding:9px 12px; box-shadow:0 4px 16px rgba(11,41,66,.18); font-size:11px; color:var(--muted); border:1px solid var(--line)}
+  #legend.hidden{display:none}
+  #legend .lbl{font-weight:600; color:var(--ink); margin-bottom:5px}
+  .bar{height:9px; width:150px; border-radius:5px; margin-bottom:3px}
+  .barlabels{display:flex; justify-content:space-between}
+
+  .welcome{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:500; color:var(--muted); pointer-events:none}
+  .welcome .box{text-align:center; background:rgba(255,255,255,.9); padding:26px 34px; border-radius:16px; box-shadow:0 8px 30px rgba(11,41,66,.15)}
+  .welcome h2{color:var(--navy); font-size:18px; margin-bottom:6px}
+  .welcome p{font-size:13px}
+
+  /* ---------- generic content pages ---------- */
+  .page{max-width:960px; margin:0 auto; padding:28px 26px 60px}
+  .page h1{font-size:22px; color:var(--navy); margin-bottom:4px}
+  .page .lede{color:var(--muted); font-size:13px; margin-bottom:22px}
+  .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:26px}
+  .statcard{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; box-shadow:0 2px 10px rgba(11,41,66,.05); transition:transform .15s, box-shadow .15s}
+  .statcard:hover{transform:translateY(-2px); box-shadow:0 10px 26px rgba(11,41,66,.1)}
+  .statcard .v{font-size:26px; font-weight:800; color:var(--navy); line-height:1}
+  .statcard .v span{font-size:13px; font-weight:600; color:var(--muted)}
+  .statcard .k{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-top:6px}
+  .statcard.accent{background:linear-gradient(135deg,var(--navy),var(--steel)); border:none}
+  .statcard.accent .v{color:#fff} .statcard.accent .v span{color:var(--sky)} .statcard.accent .k{color:var(--sky)}
+  .section{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px; box-shadow:0 2px 10px rgba(11,41,66,.05)}
+  .section h2{font-size:15px; color:var(--navy); margin-bottom:14px; display:flex; align-items:center; gap:8px}
+  .records{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px}
+  .record{display:flex; flex-direction:column; gap:2px}
+  .record .rk{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
+  .record .rv{font-size:15px; font-weight:700; color:var(--ink)}
+  .record .rs{font-size:11px; color:var(--muted)}
+  #dashMap{height:340px; border-radius:12px; overflow:hidden; border:1px solid var(--line)}
+  #dashHero{position:relative; height:180px; overflow:hidden; background:linear-gradient(120deg,#08213a 0%,#123a5c 55%,#2b6086 100%)}
+  #heroCanvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+  .hero-overlay{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 max(26px,calc(50% - 480px + 26px)); pointer-events:none}
+  .hero-eyebrow{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--sky); opacity:.85}
+  .hero-title{font-size:30px; font-weight:800; color:#fff; letter-spacing:-.5px; margin-top:4px; text-shadow:0 2px 18px rgba(0,0,0,.35)}
+  .hero-sub{font-size:13px; color:#cfe4f2; margin-top:3px}
+
+  /* forms */
+  .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .field{display:flex; flex-direction:column; gap:5px}
+  .field.full{grid-column:1 / -1}
+  .field label{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600}
+  .field input,.field textarea,.field select{border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:14px; color:var(--ink); background:#fff; font-family:inherit}
+  .field textarea{resize:vertical; min-height:70px}
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none; border-color:var(--steel); box-shadow:0 0 0 3px rgba(61,106,146,.12)}
+  .btn{background:var(--navy); color:#fff; border:none; border-radius:10px; padding:10px 18px; font-size:13px; font-weight:600; cursor:pointer; transition:.12s}
+  .btn:hover{background:var(--navy2)}
+  .btn.ghost{background:transparent; color:var(--steel); border:1px solid var(--line)}
+  .btn.ghost:hover{background:var(--foam)}
+  .btn.danger{background:transparent; color:#c0392b; border:1px solid #e6c3bd}
+  .btn.danger:hover{background:#fbecea}
+  .btn.sm{padding:6px 12px; font-size:12px}
+  .btnrow{display:flex; gap:10px; margin-top:16px; align-items:center}
+  .saved{color:var(--ok); font-size:12px; opacity:0; transition:.2s}
+  .saved.show{opacity:1}
+
+  /* photos */
+  .gallery{display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; margin-top:10px}
+  .gallery .ph{position:relative; aspect-ratio:4/3; border-radius:9px; overflow:hidden; border:1px solid var(--line); background:var(--foam)}
+  .gallery .ph img{width:100%; height:100%; object-fit:cover; display:block}
+  .gallery .ph button{position:absolute; top:4px; right:4px; width:20px; height:20px; border:none; border-radius:5px; background:rgba(11,41,66,.7); color:#fff; cursor:pointer; font-size:13px; line-height:1}
+  .gallery .ph button:hover{background:rgba(192,57,43,.9)}
+
+  /* table */
+  table.log{width:100%; border-collapse:collapse; font-size:13px}
+  table.log th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); padding:8px 10px; border-bottom:2px solid var(--line)}
+  table.log td{padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+  table.log tr:hover td{background:var(--foam)}
+  .cat{font-size:10px; padding:2px 8px; border-radius:10px; background:var(--foam); color:var(--steel); font-weight:600}
+  .rowbtns{display:flex; gap:6px}
+  .rowbtns button{border:none; background:transparent; cursor:pointer; color:var(--muted); font-size:13px; padding:2px 4px; border-radius:5px}
+  .rowbtns button:hover{background:var(--line); color:var(--ink)}
+
+  /* modal */
+  #modal{position:fixed; inset:0; z-index:2000; background:rgba(11,41,66,.5); display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto}
+  #modal.open{display:flex}
+  .modal-box{background:#fff; border-radius:16px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(11,41,66,.4); overflow:hidden}
+  .modal-head{padding:16px 20px; background:linear-gradient(90deg,var(--navy),var(--steel)); color:#fff; display:flex; justify-content:space-between; align-items:center}
+  .modal-head h3{font-size:16px}
+  .modal-head button{background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer; line-height:1}
+  .modal-body{padding:20px}
+
+  /* brochure */
+  #brochure{max-width:820px; margin:0 auto; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 4px 20px rgba(11,41,66,.08)}
+  .br-hero{position:relative; background:linear-gradient(135deg,var(--navy),var(--steel)); color:#fff; padding:34px 36px}
+  .br-hero.haspic{padding:0}
+  .br-hero .heropic{width:100%; height:300px; object-fit:cover; display:block}
+  .br-hero .overlay{position:absolute; left:0; right:0; bottom:0; padding:26px 36px; background:linear-gradient(0deg,rgba(11,41,66,.85),transparent)}
+  .br-hero h1{font-size:30px; margin-bottom:4px}
+  .br-hero .sub{font-size:14px; color:var(--sky)}
+  .br-body{padding:30px 36px}
+  .br-body h2{font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--steel); border-bottom:2px solid var(--line); padding-bottom:6px; margin:26px 0 14px}
+  .br-body h2:first-child{margin-top:0}
+  .spec{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:14px 22px}
+  .spec .s .sk{font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
+  .spec .s .sv{font-size:15px; font-weight:600; color:var(--ink)}
+  .br-stats{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; text-align:center}
+  .br-stats .bs .v{font-size:24px; font-weight:800; color:var(--navy)}
+  .br-stats .bs .k{font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
+  .br-gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+  .br-gallery img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:8px}
+  .br-toolbar{max-width:820px; margin:0 auto 16px; display:flex; justify-content:flex-end; gap:10px}
+  .muted{color:var(--muted); font-size:13px}
+
+  @media (max-width:760px){
+    #view-voyages{grid-template-columns:1fr; grid-template-rows:auto 1fr}
+    .form-grid,.br-stats{grid-template-columns:1fr 1fr}
+    #nav button{padding:8px 9px; font-size:12px}
+  }
+  /* print */
+  @media print{
+    #topbar,.br-toolbar{display:none !important}
+    body,#views,.view{height:auto; overflow:visible; position:static}
+    #brochure{border:none; box-shadow:none; border-radius:0}
+    .view:not(#view-brochure){display:none !important}
+  }
+</style>
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand"><svg class="wheel" viewBox="0 0 24 24" fill="none" stroke="#7fb3d5" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/></svg> Sailing Log</div>
+    <nav id="nav">
+      <button data-v="dashboard" class="active">Dashboard</button>
+      <button data-v="catalog">Voyages</button>
+      <button data-v="voyages">Map</button>
+      <button data-v="boat">Boat</button>
+      <button data-v="maintenance">Maintenance</button>
+      <button data-v="brochure">Brochure</button>
+    </nav>
+    <div class="spacer"></div>
+    <div id="boatname"></div>
+  </header>
+
+  <div id="views">
+    <!-- VOYAGES CATALOG -->
+    <section id="view-catalog" class="view hidden"><div class="page" id="catalogPage"></div></section>
+
+    <!-- MAP / LEGS -->
+    <section id="view-voyages" class="view hidden">
+      <aside id="sidebar">
+        <div class="drop" id="drop">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7fb3d5" stroke-width="1.6"><path d="M12 16V4M12 4 8 8M12 4l4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <div class="big">Drop a .gpx file here</div>
+          <div class="small">or click to browse</div>
+          <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple hidden />
+        </div>
+        <label class="combine-row"><input type="checkbox" id="combineChk"> Combine multiple files into one trip</label>
+        <div class="listhead"><span>Legs <span id="count"></span></span><span class="lh-actions"><button id="mergeBtn" title="Merge the shown legs">Merge</button><button id="showAll">Show all</button><button id="clearAll">Clear</button></span></div>
+        <div class="sortrow"><label>Sort</label><select id="sortSel">
+          <option value="oldest">Oldest first</option>
+          <option value="newest">Newest first</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="dist">Distance (longest)</option>
+        </select></div>
+        <div class="sortrow" style="padding-top:0"><button id="assignVoyage" class="mini-btn">Add shown → voyage</button></div>
+        <ul id="tripList"></ul>
+        <div class="foot">Saved in this browser. Charts &copy; OpenStreetMap, CARTO &amp; OpenSeaMap.</div>
+      </aside>
+
+      <div id="mapWrap">
+        <div id="map"></div>
+        <div class="welcome" id="welcome"><div class="box"><h2>Welcome aboard ⚓</h2><p>Upload a GPX file to plot the route and log the trip.</p></div></div>
+        <div id="stats" class="hidden">
+          <div class="st-head"><div><div class="t" id="st-title"></div><div class="d" id="st-date"></div></div><button class="play" id="playBtn" title="Play voyage">▶</button></div>
+          <div class="grid">
+            <div class="cell"><div class="v" id="st-dist"></div><div class="k">Distance</div></div>
+            <div class="cell"><div class="v" id="st-dur"></div><div class="k">Duration</div></div>
+            <div class="cell"><div class="v" id="st-avg"></div><div class="k" id="k-avg">Avg speed</div></div>
+            <div class="cell"><div class="v" id="st-max"></div><div class="k" id="k-max">Max speed</div></div>
+            <div class="cell single-only"><div class="v" id="st-voy"></div><div class="k">Voyage avg</div></div>
+            <div class="cell single-only"><div class="v" id="st-harb"></div><div class="k">Harbour avg</div></div>
+          </div>
+          <div class="thr single-only" id="thrRow">Harbour below <input type="range" id="thrRange" min="1" max="6" step="0.5"> <b id="thrVal"></b> kn</div>
+          <div class="route" id="st-route"></div>
+          <div class="st-actions" id="st-actions"><button id="editTripBtn">✎ Log details</button></div>
+        </div>
+        <div id="legend" class="hidden">
+          <div class="lbl">Speed (knots)</div>
+          <div class="bar" id="legendbar"></div>
+          <div class="barlabels"><span>0</span><span id="legmid"></span><span id="legmax"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="view">
+      <div id="dashHero"><canvas id="heroCanvas"></canvas><div class="hero-overlay"><div class="hero-eyebrow">Ship's logbook</div><div class="hero-title" id="heroTitle">Sailing Logbook</div><div class="hero-sub" id="heroSub">Every mile, logged.</div></div></div>
+      <div class="page" id="dashPage"></div>
+    </section>
+
+    <!-- BOAT -->
+    <section id="view-boat" class="view hidden"><div class="page" id="boatPage"></div></section>
+
+    <!-- MAINTENANCE -->
+    <section id="view-maintenance" class="view hidden"><div class="page" id="maintPage"></div></section>
+
+    <!-- BROCHURE -->
+    <section id="view-brochure" class="view hidden"><div class="page" id="brochurePage"></div></section>
+  </div>
+
+  <!-- modal -->
+  <div id="modal"><div class="modal-box"><div class="modal-head"><h3 id="modalTitle"></h3><button id="modalClose">&times;</button></div><div class="modal-body" id="modalBody"></div></div></div>
+
+<script>
+"use strict";
+
+/* =================== IndexedDB layer =================== */
+const DB_NAME = "sailinglog", DB_VER = 2;
+let db=null, useIDB=false;
+function openIDB(){
+  return new Promise((res,rej)=>{
+    let r; try{ r=indexedDB.open(DB_NAME,DB_VER); }catch(e){ return rej(e); }
+    r.onupgradeneeded = e => {
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains("trips")) d.createObjectStore("trips",{keyPath:"id"});
+      if(!d.objectStoreNames.contains("boat")) d.createObjectStore("boat",{keyPath:"id"});
+      if(!d.objectStoreNames.contains("maintenance")) d.createObjectStore("maintenance",{keyPath:"id"});
+      if(!d.objectStoreNames.contains("meta")) d.createObjectStore("meta",{keyPath:"k"});
+      if(!d.objectStoreNames.contains("voyages")) d.createObjectStore("voyages",{keyPath:"id"});
+    };
+    r.onsuccess = e => { db = e.target.result; res(db); };
+    r.onerror = () => rej(r.error);
+    r.onblocked = () => rej(new Error("blocked"));
+  });
+}
+const _store=(name,mode="readonly")=>db.transaction(name,mode).objectStore(name);
+const _all=name=>new Promise((res,rej)=>{ const r=_store(name).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+const _get=(name,key)=>new Promise((res,rej)=>{ const r=_store(name).get(key); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+const _put=(name,val)=>new Promise((res,rej)=>{ const r=_store(name,"readwrite").put(val); r.onsuccess=()=>res(val); r.onerror=()=>rej(r.error); });
+const _del=(name,key)=>new Promise((res,rej)=>{ const r=_store(name,"readwrite").delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); });
+
+// localStorage fallback — IndexedDB is commonly disabled when opening a page as a local file (file://)
+const LS_KEY="sailinglog_store_v1";
+let lsData={trips:{},boat:{},maintenance:{},meta:{},voyages:{}};
+const keyField=name=>name==="meta"?"k":"id";
+function lsLoad(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)); if(d) lsData=Object.assign({trips:{},boat:{},maintenance:{},meta:{},voyages:{}},d); }catch(e){} }
+function lsSave(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(lsData)); return true; }catch(e){ alert("Couldn't save — the browser's local storage is full. Try removing some photos, or use fewer/larger-compressed images."); return false; } }
+
+async function openStore(){
+  try{ await openIDB(); useIDB=true; }
+  catch(e){ useIDB=false; console.warn("IndexedDB unavailable — using localStorage fallback.",e); }
+  lsLoad();
+}
+const idbAll = async name => useIDB ? _all(name) : Object.values(lsData[name]||{});
+const idbGet = async (name,key) => useIDB ? _get(name,key) : (lsData[name]||{})[key];
+const idbPut = async (name,val) => { if(useIDB) return _put(name,val); (lsData[name]=lsData[name]||{})[val[keyField(name)]]=val; lsSave(); return val; };
+const idbDel = async (name,key) => { if(useIDB) return _del(name,key); delete (lsData[name]||{})[key]; lsSave(); };
+
+/* =================== app state =================== */
+let trips = [];
+let boat = { id:"profile" };
+let maint = [];
+let voyages = [];
+let collapsedVoyages = new Set();
+let dragLegId = null;
+let shown = new Set();
+let sortMode = "oldest";
+const PALETTE = ["#e8743b","#2e9e6b","#2b62ff","#d12d2d","#8e44ad","#00a8cc","#e6b800","#c0398b","#16a085","#f39c12"];
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* =================== geo & stats =================== */
+function haversineNm(a,b){
+  const R=3440.065, toR=d=>d*Math.PI/180;
+  const dLat=toR(b[0]-a[0]), dLon=toR(b[1]-a[1]);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+const haversineM = (a,b) => haversineNm(a,b)*1852;
+
+function computeStats(points){
+  let dist=0; const speeds=[];
+  for(let i=1;i<points.length;i++){
+    const d=haversineNm(points[i-1],points[i]); dist+=d;
+    const t0=points[i-1][2], t1=points[i][2]; let kn=null;
+    if(t0!=null && t1!=null){ const hrs=(t1-t0)/3600000; if(hrs>0) kn=d/hrs; }
+    speeds.push(kn);
+  }
+  const times=points.map(p=>p[2]).filter(t=>t!=null);
+  const start=times.length?Math.min(...times):null, end=times.length?Math.max(...times):null;
+  const durMs=(start!=null&&end!=null)?end-start:null;
+  const avg=(durMs&&durMs>0)?dist/(durMs/3600000):null;
+  // robust max speed: 99th percentile of instantaneous speeds. A plain max is
+  // dominated by GPS spikes (brief position jumps that imply impossible speeds);
+  // p99 keeps the genuine peak while rejecting that noise.
+  const finite=speeds.filter(s=>s!=null&&isFinite(s)).sort((a,b)=>a-b);
+  const max=finite.length?finite[Math.floor((finite.length-1)*0.99)]:0;
+  return { dist, durMs, avg, max, speeds, start, end };
+}
+
+let harbourThreshold = 3; // knots — below this counts as harbour / maneuvering
+function speedSplit(points, thr){
+  let hD=0,hT=0,vD=0,vT=0;
+  for(let i=1;i<points.length;i++){
+    const t0=points[i-1][2], t1=points[i][2]; if(t0==null||t1==null) continue;
+    const hrs=(t1-t0)/3600000; if(hrs<=0) continue;
+    const d=haversineNm(points[i-1],points[i]); const kn=d/hrs;
+    if(kn<thr){ hD+=d; hT+=hrs; } else { vD+=d; vT+=hrs; }
+  }
+  return { harbourAvg:hT>0?hD/hT:null, voyageAvg:vT>0?vD/vT:null };
+}
+
+// stop / anchorage detection: stays within R metres for >= T ms
+function detectStops(points, R=60, T=20*60000){
+  const stops=[]; const n=points.length; let i=0;
+  while(i<n){
+    let j=i+1;
+    while(j<n && haversineM(points[i],points[j])<R) j++;
+    const t0=points[i][2], t1=points[j-1][2];
+    if(t0!=null && t1!=null && (t1-t0)>=T){
+      let la=0,lo=0; for(let k=i;k<j;k++){ la+=points[k][0]; lo+=points[k][1]; }
+      const c=j-i; stops.push({ lat:la/c, lon:lo/c, start:t0, end:t1, durMs:t1-t0 });
+      i=j;
+    } else i++;
+  }
+  return stops;
+}
+
+/* =================== GPX parsing =================== */
+function parseGpx(text, fallbackName){
+  const xml=new DOMParser().parseFromString(text,"application/xml");
+  if(xml.querySelector("parsererror")) throw new Error("Could not read this file as GPX.");
+  const pts=[];
+  xml.querySelectorAll("trkpt, rtept").forEach(p=>{
+    const lat=parseFloat(p.getAttribute("lat")), lon=parseFloat(p.getAttribute("lon"));
+    if(isNaN(lat)||isNaN(lon)) return;
+    const tEl=p.querySelector("time"); const t=tEl?Date.parse(tEl.textContent):null;
+    pts.push([lat,lon,isNaN(t)?null:t]);
+  });
+  if(!pts.length) throw new Error("No track points found in this GPX file.");
+  const nameEl=xml.querySelector("trk > name, metadata > name, rte > name");
+  let name=(nameEl&&nameEl.textContent.trim())||fallbackName.replace(/\.gpx$/i,"");
+  const firstT=pts.find(p=>p[2]!=null);
+  const metaTime=xml.querySelector("metadata > time");
+  const dateMs=firstT?firstT[2]:(metaTime?Date.parse(metaTime.textContent):Date.now());
+  return { name, dateMs, points:pts };
+}
+
+/* =================== formatting =================== */
+const pad=n=>String(n).padStart(2,"0");
+function fmtDur(ms){ if(ms==null) return "—"; const h=Math.floor(ms/3600000), m=Math.round((ms%3600000)/60000); return h>0?`${h}h ${pad(m)}m`:`${m}m`; }
+function fmtDurLong(ms){ if(ms==null) return "—"; const h=Math.floor(ms/3600000), m=Math.round((ms%3600000)/60000); return h>0?`${h} h ${m} min`:`${m} min`; }
+function fmtDate(ms){ return new Date(ms).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"}); }
+function fmtDateShort(ms){ return new Date(ms).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}); }
+function fmtTime(ms){ return ms==null?"—":new Date(ms).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
+function fmtCoord(p){ const la=p[0],lo=p[1]; return `${Math.abs(la).toFixed(4)}°${la>=0?"N":"S"}, ${Math.abs(lo).toFixed(4)}°${lo>=0?"E":"W"}`; }
+
+/* =================== speed colour =================== */
+function speedColor(t){
+  t=Math.max(0,Math.min(1,t));
+  const stops=[[41,98,255],[0,168,204],[46,158,107],[221,199,53],[232,116,59],[209,45,45]];
+  const x=t*(stops.length-1); const i=Math.floor(x); const f=x-i;
+  const a=stops[i], b=stops[Math.min(i+1,stops.length-1)];
+  const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+/* =================== main map =================== */
+const map=L.map("map",{zoomControl:false,preferCanvas:true}).setView([56.2,11.1],8);
+L.control.zoom({position:"bottomright"}).addTo(map);
+const street=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{maxZoom:20,subdomains:"abcd",attribution:"&copy; OpenStreetMap &copy; CARTO"});
+const satellite=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:19,attribution:"Imagery &copy; Esri"});
+const seamark=L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png",{maxZoom:18,attribution:"&copy; OpenSeaMap"});
+street.addTo(map);
+L.control.layers({"Street chart":street,"Satellite":satellite},{"⚓ Sea marks (OpenSeaMap)":seamark},{position:"topright",collapsed:false}).addTo(map);
+let trackLayer=L.layerGroup().addTo(map);
+
+const anchorIcon = L.divIcon({ className:"", html:'<div style="font-size:18px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">⚓</div>', iconSize:[20,20], iconAnchor:[10,10] });
+
+const shownTrips = () => trips.slice().sort((a,b)=>a.dateMs-b.dateMs).filter(t=>shown.has(t.id));
+const colorMap = () => { const m={}; shownTrips().forEach((t,i)=>m[t.id]=PALETTE[i%PALETTE.length]); return m; };
+
+/* ---- render controller ---- */
+function render(){
+  stopPlayback();
+  trackLayer.clearLayers();
+  const list=shownTrips();
+  const S=document.getElementById("stats"), LG=document.getElementById("legend"), W=document.getElementById("welcome");
+  if(!list.length){ S.classList.add("hidden"); LG.classList.add("hidden"); W.style.display=trips.length?"none":"flex"; renderList(); return; }
+  W.style.display="none";
+  if(list.length===1) drawSingle(list[0]); else drawMulti(list);
+  renderList();
+}
+
+function drawMulti(list){
+  const cmap=colorMap(); const all=[];
+  list.forEach(trip=>{
+    const pts=trip.points; const s=computeStats(pts);
+    const tip=`<div class="tt"><div class="tt-h">${esc(trip.name)}</div><div class="tt-r"><span>Date</span><b>${fmtDateShort(trip.dateMs)}</b></div><div class="tt-r"><span>Distance</span><b>${s.dist.toFixed(1)} nm</b></div><div class="tt-r"><span>Duration</span><b>${fmtDur(s.durMs)}</b></div><div class="tt-r"><span>Avg speed</span><b>${s.avg!=null?s.avg.toFixed(1)+" kn":"—"}</b></div></div>`;
+    L.polyline(pts.map(p=>[p[0],p[1]]),{color:cmap[trip.id],weight:3.5,opacity:.9,lineCap:"round"}).addTo(trackLayer).bindTooltip(tip,{sticky:true,className:"trk-tip"});
+    L.circleMarker([pts[0][0],pts[0][1]],{radius:5,color:"#fff",weight:2,fillColor:cmap[trip.id],fillOpacity:1}).addTo(trackLayer).bindTooltip(tip,{direction:"top",className:"trk-tip"});
+    pts.forEach(p=>all.push([p[0],p[1]]));
+  });
+  map.fitBounds(L.latLngBounds(all),{padding:[60,60]});
+  let dist=0,durMs=0,minT=Infinity,maxT=-Infinity;
+  list.forEach(t=>{ const s=computeStats(t.points); dist+=s.dist; if(s.durMs)durMs+=s.durMs; if(s.start!=null)minT=Math.min(minT,s.start); if(s.end!=null)maxT=Math.max(maxT,s.end); });
+  document.getElementById("stats").classList.remove("hidden");
+  document.getElementById("stats").classList.add("multi");
+  document.getElementById("legend").classList.add("hidden");
+  document.getElementById("playBtn").style.display="none";
+  document.getElementById("st-actions").style.display="none";
+  document.getElementById("st-title").textContent=list.length+" trips shown";
+  document.getElementById("st-date").textContent=fmtDate(minT)+" – "+fmtDate(maxT);
+  document.getElementById("st-dist").innerHTML=dist.toFixed(1)+' <span>nm</span>';
+  document.getElementById("st-dur").innerHTML=fmtDur(durMs);
+  document.getElementById("k-avg").textContent="Trips";
+  document.getElementById("st-avg").innerHTML=list.length;
+  document.getElementById("k-max").textContent="Avg speed";
+  document.getElementById("st-max").innerHTML=(durMs?(dist/(durMs/3600000)).toFixed(1):"—")+' <span>kn</span>';
+  document.getElementById("st-route").innerHTML=list.map(t=>`<span class="chip" style="background:${cmap[t.id]}"></span> <b>${esc(t.name)}</b>`).join("<br>");
+}
+
+let currentTripId=null;
+function drawSingle(trip){
+  currentTripId=trip.id;
+  const pts=trip.points;
+  document.getElementById("playBtn").style.display="";
+  document.getElementById("st-actions").style.display="";
+  document.getElementById("k-avg").textContent="Avg speed";
+  document.getElementById("k-max").textContent="Max speed";
+  const stats=computeStats(pts);
+  const sp=stats.speeds.filter(s=>s!=null&&isFinite(s)).sort((a,b)=>a-b);
+  let scaleMax=sp.length?sp[Math.floor(sp.length*0.95)]:0;
+  if(!scaleMax||scaleMax<1) scaleMax=Math.max(1,stats.max);
+  for(let i=1;i<pts.length;i++){
+    const kn=stats.speeds[i-1];
+    const col=kn==null?"#3d6a92":speedColor(kn/scaleMax);
+    L.polyline([[pts[i-1][0],pts[i-1][1]],[pts[i][0],pts[i][1]]],{color:col,weight:4,opacity:.95,lineCap:"round"}).addTo(trackLayer);
+  }
+  // cumulative distance per point, for hover readouts
+  const cum=[0]; for(let i=1;i<pts.length;i++) cum[i]=cum[i-1]+haversineNm(pts[i-1],pts[i]);
+  const pointTip=i=>{
+    const p=pts[i]; const kn=i>0?stats.speeds[i-1]:(stats.speeds[0]!=null?stats.speeds[0]:null);
+    const elapsed=(p[2]!=null&&stats.start!=null)?p[2]-stats.start:null;
+    return `<div class="tt"><div class="tt-h">${fmtTime(p[2])}</div>`+
+      `<div class="tt-r"><span>Speed</span><b>${kn!=null?kn.toFixed(1)+" kn":"—"}</b></div>`+
+      `<div class="tt-r"><span>Distance</span><b>${cum[i].toFixed(2)} nm</b></div>`+
+      `<div class="tt-r"><span>Elapsed</span><b>${fmtDur(elapsed)}</b></div>`+
+      `<div class="tt-r"><span>Position</span><b>${fmtCoord(p)}</b></div></div>`;
+  };
+  // transparent wide line captures hover anywhere along the track
+  const hit=L.polyline(pts.map(p=>[p[0],p[1]]),{color:"#000",weight:14,opacity:0,interactive:true}).addTo(trackLayer);
+  hit.bindTooltip("",{sticky:true,className:"trk-tip",direction:"top",opacity:1});
+  hit.on("mousemove",e=>{ let best=0,bd=Infinity; for(let i=0;i<pts.length;i++){ const dy=pts[i][0]-e.latlng.lat, dx=pts[i][1]-e.latlng.lng, d=dy*dy+dx*dx; if(d<bd){ bd=d; best=i; } } hit.setTooltipContent(pointTip(best)); });
+  // start / finish dots
+  const mk=(p,color,title,i)=>L.circleMarker([p[0],p[1]],{radius:7,color:"#fff",weight:2,fillColor:color,fillOpacity:1}).addTo(trackLayer)
+    .bindTooltip(`<div class="tt"><div class="tt-h">${title}</div><div class="tt-r"><span>Time</span><b>${fmtTime(p[2])}</b></div><div class="tt-r"><span>Distance</span><b>${cum[i].toFixed(2)} nm</b></div><div class="tt-r"><span>Position</span><b>${fmtCoord(p)}</b></div></div>`,{direction:"top",className:"trk-tip"});
+  mk(pts[0],"#2e9e6b","Departure",0);
+  mk(pts[pts.length-1],"#d12d2d","Arrival",pts.length-1);
+  // anchorages
+  detectStops(pts).forEach((s,i)=>{ L.marker([s.lat,s.lon],{icon:anchorIcon}).addTo(trackLayer).bindTooltip(`<div class="tt"><div class="tt-h">Stop ${i+1}</div><div class="tt-r"><span>Arrived</span><b>${fmtTime(s.start)}</b></div><div class="tt-r"><span>Departed</span><b>${fmtTime(s.end)}</b></div><div class="tt-r"><span>Duration</span><b>${fmtDurLong(s.durMs)}</b></div><div class="tt-r"><span>Position</span><b>${fmtCoord([s.lat,s.lon])}</b></div></div>`,{direction:"top",className:"trk-tip"}); });
+  map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])),{padding:[60,60]});
+  document.getElementById("welcome").style.display="none";
+  document.getElementById("stats").classList.remove("hidden");
+  document.getElementById("stats").classList.remove("multi");
+  document.getElementById("st-title").textContent=trip.name;
+  document.getElementById("st-date").textContent=fmtDate(trip.dateMs);
+  document.getElementById("st-dist").innerHTML=stats.dist.toFixed(1)+' <span>nm</span>';
+  document.getElementById("st-dur").innerHTML=fmtDur(stats.durMs);
+  document.getElementById("st-avg").innerHTML=(stats.avg!=null?stats.avg.toFixed(1):"—")+' <span>kn</span>';
+  document.getElementById("st-max").innerHTML=(stats.max?stats.max.toFixed(1):"—")+' <span>kn</span>';
+  let routeHtml=`<b>Depart</b> ${fmtTime(stats.start)} · ${fmtCoord(pts[0])}<br><b>Arrive</b> ${fmtTime(stats.end)} · ${fmtCoord(pts[pts.length-1])}`;
+  if(trip.engineHours) routeHtml+=`<br><b>Engine</b> ${trip.engineHours} h`;
+  if(trip.crew) routeHtml+=`<br><b>Crew</b> ${esc(trip.crew)}`;
+  document.getElementById("st-route").innerHTML=routeHtml;
+  // harbour vs voyage speed split
+  function updateSplit(){
+    const s2=speedSplit(pts,harbourThreshold);
+    document.getElementById("st-voy").innerHTML=(s2.voyageAvg!=null?s2.voyageAvg.toFixed(1):"—")+' <span>kn</span>';
+    document.getElementById("st-harb").innerHTML=(s2.harbourAvg!=null?s2.harbourAvg.toFixed(1):"—")+' <span>kn</span>';
+    document.getElementById("thrVal").textContent=harbourThreshold.toFixed(1);
+  }
+  const rng=document.getElementById("thrRange"); rng.value=harbourThreshold;
+  rng.oninput=async()=>{ harbourThreshold=parseFloat(rng.value); updateSplit(); try{ await idbPut("meta",{k:"harbourKn",v:harbourThreshold}); }catch(e){} };
+  updateSplit();
+  const L2=document.getElementById("legend"); L2.classList.remove("hidden");
+  let grad="linear-gradient(90deg,"; for(let s=0;s<=10;s++){ grad+=speedColor(s/10)+(s<10?",":""); } grad+=")";
+  document.getElementById("legendbar").style.background=grad;
+  document.getElementById("legmax").textContent=scaleMax.toFixed(0);
+  document.getElementById("legmid").textContent=(scaleMax/2).toFixed(0);
+}
+
+/* ---- voyage playback ---- */
+let playMarker=null, playTimer=null;
+function stopPlayback(){ if(playTimer){ clearInterval(playTimer); playTimer=null; } if(playMarker){ trackLayer.removeLayer(playMarker); playMarker=null; } const b=document.getElementById("playBtn"); if(b) b.textContent="▶"; }
+function togglePlayback(){
+  if(playTimer){ stopPlayback(); return; }
+  const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
+  const pts=trip.points; if(pts.length<2) return;
+  const btn=document.getElementById("playBtn"); btn.textContent="⏸";
+  playMarker=L.circleMarker([pts[0][0],pts[0][1]],{radius:8,color:"#fff",weight:3,fillColor:"#e8743b",fillOpacity:1}).addTo(trackLayer);
+  const STEPS=Math.min(600,pts.length); const total=pts.length; let step=0;
+  playTimer=setInterval(()=>{
+    step++; const idx=Math.floor(step/STEPS*(total-1));
+    if(idx>=total-1){ playMarker.setLatLng([pts[total-1][0],pts[total-1][1]]); stopPlayback(); return; }
+    playMarker.setLatLng([pts[idx][0],pts[idx][1]]);
+  }, 40);
+}
+
+/* ---- sidebar list ---- */
+const distOf = t => (t.distNm!=null?t.distNm:parseFloat(t.summary)) || 0;
+function sortComparator(a,b){
+  switch(sortMode){
+    case "newest": return b.dateMs-a.dateMs;
+    case "name": return a.name.localeCompare(b.name);
+    case "dist": return distOf(b)-distOf(a);
+    default: return a.dateMs-b.dateMs;
+  }
+}
+/* ---- voyages ---- */
+function aggStats(list){
+  let dist=0,durMs=0,minT=Infinity,maxT=-Infinity; const days=new Set();
+  list.forEach(t=>{ const s=computeStats(t.points); dist+=s.dist; if(s.durMs)durMs+=s.durMs;
+    if(s.start!=null) minT=Math.min(minT,s.start); if(s.end!=null) maxT=Math.max(maxT,s.end);
+    days.add(new Date(t.dateMs).toISOString().slice(0,10)); });
+  return { dist, durMs, days:days.size, count:list.length, start:isFinite(minT)?minT:null, end:isFinite(maxT)?maxT:null };
+}
+const legsOf = vid => trips.filter(t=>t.voyageId===vid);
+async function createVoyage(name, legIds){
+  const v={ id:"v"+Date.now()+"_"+Math.random().toString(36).slice(2,6), name:name||"New voyage", dateMs:Date.now() };
+  await idbPut("voyages",v); voyages.push(v);
+  if(legIds) for(const id of legIds){ const t=trips.find(x=>x.id===id); if(t){ t.voyageId=v.id; await idbPut("trips",t); } }
+  return v;
+}
+async function renameVoyage(id,name){ const v=voyages.find(x=>x.id===id); if(v&&name){ v.name=name; await idbPut("voyages",v); } }
+async function deleteVoyage(id){
+  for(const t of trips.filter(t=>t.voyageId===id)){ t.voyageId=null; await idbPut("trips",t); }
+  await idbDel("voyages",id); voyages=voyages.filter(v=>v.id!==id);
+}
+async function assignLegs(voyageId, legIds){
+  for(const id of legIds){ const t=trips.find(x=>x.id===id); if(t){ t.voyageId=voyageId||null; await idbPut("trips",t); } }
+}
+async function moveLegToVoyage(legId, vid){
+  const t=trips.find(x=>x.id===legId); if(!t) return;
+  const target=vid||null; if((t.voyageId||null)===target) return;
+  t.voyageId=target; await idbPut("trips",t);
+  render(); if(!document.getElementById("view-catalog").classList.contains("hidden")) renderCatalog();
+}
+// modal to add legs to a voyage (existing or new)
+function assignModal(legIds){
+  const opts=voyages.slice().map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join("");
+  openModal("Add "+legIds.length+" leg"+(legIds.length>1?"s":"")+" to a voyage",
+    `<div class="field"><label>Voyage</label><select id="av-sel"><option value="">➕ New voyage…</option>${opts}</select></div>
+     <div class="field" id="av-newwrap"><label>New voyage name</label><input id="av-name" placeholder="e.g. Summer 2026"></div>
+     <div class="btnrow"><button class="btn" id="av-save">Add to voyage</button><button class="btn ghost" id="av-cancel">Cancel</button></div>`);
+  const sel=document.getElementById("av-sel"), newwrap=document.getElementById("av-newwrap");
+  const sync=()=>{ newwrap.style.display=sel.value?"none":"flex"; }; sync();
+  sel.addEventListener("change",sync);
+  document.getElementById("av-cancel").addEventListener("click",closeModal);
+  document.getElementById("av-save").addEventListener("click",async()=>{
+    let vid=sel.value;
+    if(!vid){ const nm=document.getElementById("av-name").value.trim()||"New voyage"; const v=await createVoyage(nm); vid=v.id; }
+    await assignLegs(vid,legIds);
+    closeModal(); if(!document.getElementById("view-catalog").classList.contains("hidden")) renderCatalog(); render();
+  });
+}
+
+function renderList(){
+  const ul=document.getElementById("tripList"); ul.innerHTML="";
+  document.getElementById("count").textContent=trips.length?"("+trips.length+")":"";
+  if(!trips.length){ ul.innerHTML='<li class="empty">No legs yet.<br>Drop a GPX file above to start your logbook.</li>'; return; }
+  const cmap=shown.size>1?colorMap():{};
+  const renderLeg=trip=>{
+    const on=shown.has(trip.id);
+    const li=document.createElement("li");
+    li.className="trip"+(on?" active":"");
+    const chip=(on&&shown.size>1)?`<span class="chip" style="background:${cmap[trip.id]}"></span>`:"";
+    const badges=[]; if(trip.photos&&trip.photos.length) badges.push(`📷 ${trip.photos.length}`); if(trip.engineHours) badges.push(`⚙ ${trip.engineHours}h`); if(trip.crew) badges.push("👤");
+    li.innerHTML=`<div class="name">${chip}<span class="txt"></span></div><div class="meta">${fmtDate(trip.dateMs)} · ${trip.summary||""}</div>${badges.length?`<div class="badges">${badges.map(b=>`<span class="badge">${b}</span>`).join("")}</div>`:""}<button class="ren" title="Rename">✎</button><button class="del" title="Delete">×</button>`;
+    li.querySelector(".name .txt").textContent=trip.name;
+    li.addEventListener("click",e=>{ const c=e.target.classList; if(c.contains("del")||c.contains("ren")||c.contains("renameInput")) return; toggle(trip.id); });
+    li.querySelector(".ren").addEventListener("click",e=>{ e.stopPropagation(); startRename(li,trip); });
+    li.querySelector(".del").addEventListener("click",e=>{ e.stopPropagation(); delTrip(trip.id); });
+    // drag to move between voyages
+    li.setAttribute("draggable","true");
+    li.addEventListener("dragstart",e=>{ dragLegId=trip.id; li.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{e.dataTransfer.setData("text/plain",trip.id);}catch(_){} });
+    li.addEventListener("dragend",()=>{ dragLegId=null; document.querySelectorAll(".dragging,.drop-target").forEach(x=>x.classList.remove("dragging","drop-target")); });
+    li.addEventListener("dragover",e=>{ if(dragLegId&&dragLegId!==trip.id){ e.preventDefault(); e.dataTransfer.dropEffect="move"; li.classList.add("drop-target"); } });
+    li.addEventListener("dragleave",()=>li.classList.remove("drop-target"));
+    li.addEventListener("drop",e=>{ e.preventDefault(); li.classList.remove("drop-target"); if(dragLegId&&dragLegId!==trip.id) moveLegToVoyage(dragLegId, trip.voyageId||null); });
+    ul.appendChild(li);
+  };
+  const groupHeader=(name,legs,vid)=>{
+    const ag=aggStats(legs); const collapsed=vid&&collapsedVoyages.has(vid);
+    const li=document.createElement("li"); li.className="grouphdr";
+    li.innerHTML=`<span class="gh-tw">${vid?(collapsed?"▸":"▾"):"•"}</span><div class="gh-main"><div class="gh-name"></div><div class="gh-sub">${legs.length} leg${legs.length>1?"s":""} · ${ag.dist.toFixed(0)} nm${ag.start!=null?" · "+fmtDateShort(ag.start)+" – "+fmtDateShort(ag.end):""}</div></div>`;
+    li.querySelector(".gh-name").textContent=name;
+    li.querySelector(".gh-tw").addEventListener("click",e=>{ e.stopPropagation(); if(vid){ collapsedVoyages.has(vid)?collapsedVoyages.delete(vid):collapsedVoyages.add(vid); renderList(); } });
+    if(vid) li.addEventListener("click",()=>{ shown=new Set(legs.map(l=>l.id)); render(); });
+    // drop target: move a dragged leg into this voyage (or Unassigned when vid is null)
+    li.addEventListener("dragover",e=>{ if(dragLegId){ e.preventDefault(); e.dataTransfer.dropEffect="move"; li.classList.add("drop-target"); } });
+    li.addEventListener("dragleave",()=>li.classList.remove("drop-target"));
+    li.addEventListener("drop",e=>{ e.preventDefault(); li.classList.remove("drop-target"); const id=dragLegId; if(id) moveLegToVoyage(id, vid); });
+    ul.appendChild(li); return collapsed;
+  };
+  const groups=voyages.map(v=>({v,legs:legsOf(v.id)})).filter(g=>g.legs.length);
+  groups.sort((a,b)=>Math.min(...a.legs.map(l=>l.dateMs))-Math.min(...b.legs.map(l=>l.dateMs)));
+  const assigned=new Set(); groups.forEach(g=>g.legs.forEach(l=>assigned.add(l.id)));
+  const unassigned=trips.filter(t=>!assigned.has(t.id));
+  groups.forEach(g=>{ const collapsed=groupHeader(g.v.name,g.legs,g.v.id); if(!collapsed) g.legs.slice().sort(sortComparator).forEach(renderLeg); });
+  if(unassigned.length){ if(groups.length) groupHeader("Unassigned",unassigned,null); unassigned.slice().sort(sortComparator).forEach(renderLeg); }
+}
+function toggle(id){ if(shown.has(id)) shown.delete(id); else shown.add(id); render(); }
+function startRename(li,trip){
+  li.setAttribute("draggable","false");
+  const nameDiv=li.querySelector(".name");
+  nameDiv.innerHTML=`<input class="renameInput">`;
+  const inp=nameDiv.querySelector("input"); inp.value=trip.name; inp.focus(); inp.select();
+  inp.addEventListener("click",e=>e.stopPropagation());
+  let doneR=false;
+  const commit=async save=>{ if(doneR) return; doneR=true;
+    if(save){ const v=inp.value.trim(); if(v && v!==trip.name){ trip.name=v; await idbPut("trips",trip); } }
+    renderList(); if(currentTripId===trip.id) document.getElementById("st-title").textContent=trip.name;
+  };
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); commit(true); } else if(e.key==="Escape") commit(false); });
+  inp.addEventListener("blur",()=>commit(true));
+}
+async function delTrip(id){
+  const trip=trips.find(t=>t.id===id);
+  if(!confirm(`Delete “${trip?trip.name:"this trip"}” from your logbook?`)) return;
+  await idbDel("trips",id);
+  trips=trips.filter(t=>t.id!==id); shown.delete(id); render();
+}
+
+/* ---- ingest ---- */
+const tripSig = (dateMs,points) => `${dateMs}_${points.length}_${points[points.length-1][2]||""}`;
+function makeTrip(name,dateMs,points){
+  const st=computeStats(points);
+  return { id:"t"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+    name, dateMs, points, distNm:+st.dist.toFixed(2), durMs:st.durMs,
+    summary:`${st.dist.toFixed(1)} nm · ${fmtDur(st.durMs)}`,
+    engineHours:null, crew:"", weather:"", wind:"", notes:"", photos:[] };
+}
+const readText = file => new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsText(file); });
+
+async function addFiles(fileList){
+  const files=[...fileList].filter(f=>/\.gpx$/i.test(f.name)||f.type.includes("gpx")||f.type.includes("xml"));
+  if(!files.length){ alert("Please choose a .gpx file."); return; }
+  const combine=document.getElementById("combineChk").checked && files.length>1;
+  let parsed=[];
+  for(const f of files){
+    try{ parsed.push(parseGpx(await readText(f), f.name)); }
+    catch(err){ alert(f.name+": "+err.message); }
+  }
+  if(!parsed.length) return;
+  // duplicate check (per file, unless combining)
+  if(!combine){
+    const kept=[];
+    for(const p of parsed){
+      const dup=trips.find(t=>tripSig(t.dateMs,t.points)===tripSig(p.dateMs,p.points));
+      if(dup && !confirm(`“${p.name}” looks like a duplicate of “${dup.name}” already in your log — same date and ${p.points.length} points.\n\nAdd it anyway?`)) continue;
+      kept.push(p);
+    }
+    parsed=kept;
+  }
+  if(!parsed.length) return;
+  try{
+    let newIds=[];
+    if(combine){
+      parsed.sort((a,b)=>a.dateMs-b.dateMs);
+      const points=[].concat(...parsed.map(p=>p.points));
+      const dup=trips.find(t=>tripSig(t.dateMs,t.points)===tripSig(parsed[0].dateMs,points));
+      if(dup && !confirm(`This combined trip looks like a duplicate of “${dup.name}”. Add it anyway?`)) return;
+      const trip=makeTrip((parsed[0].name||"Combined")+" (combined)", parsed[0].dateMs, points);
+      await idbPut("trips",trip); trips.push(trip); newIds=[trip.id];
+    } else {
+      for(const p of parsed){ const trip=makeTrip(p.name,p.dateMs,p.points); await idbPut("trips",trip); trips.push(trip); newIds.push(trip.id); }
+    }
+    if(newIds.length) shown=new Set(newIds);
+    render();
+  }catch(err){ alert("Couldn't save the trip: "+(err&&err.message?err.message:err)); }
+}
+
+async function mergeTrips(ids){
+  const list=trips.filter(t=>ids.has(t.id)).sort((a,b)=>a.dateMs-b.dateMs);
+  if(list.length<2) return;
+  if(!confirm(`Merge these ${list.length} trips into one? The originals will be replaced (logbook notes and photos are carried over).`)) return;
+  const points=[].concat(...list.map(t=>t.points));
+  const merged=makeTrip(list[0].name+" (merged)", list[0].dateMs, points);
+  merged.photos=[].concat(...list.map(t=>t.photos||[]));
+  merged.crew=[...new Set(list.map(t=>t.crew).filter(Boolean))].join(", ");
+  merged.notes=list.map(t=>t.notes).filter(Boolean).join("\n\n");
+  const eh=list.reduce((a,t)=>a+(t.engineHours||0),0); merged.engineHours=eh||null;
+  for(const t of list){ await idbDel("trips",t.id); }
+  trips=trips.filter(t=>!ids.has(t.id));
+  await idbPut("trips",merged); trips.push(merged);
+  shown=new Set([merged.id]); render();
+}
+
+/* =================== image helper =================== */
+function resizeImage(file,max=1600,q=0.85){
+  return new Promise(res=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{ let w=img.width,h=img.height;
+      if(Math.max(w,h)>max){ const s=max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg",q));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); res(null); };
+    img.src=url;
+  });
+}
+
+/* =================== modal =================== */
+const modal=document.getElementById("modal");
+function openModal(title,html){ document.getElementById("modalTitle").textContent=title; document.getElementById("modalBody").innerHTML=html; modal.classList.add("open"); }
+function closeModal(){ modal.classList.remove("open"); }
+document.getElementById("modalClose").addEventListener("click",closeModal);
+modal.addEventListener("click",e=>{ if(e.target===modal) closeModal(); });
+
+/* ---- trip detail editor ---- */
+let objectUrls=[];
+function revokeUrls(){ objectUrls.forEach(u=>URL.revokeObjectURL(u)); objectUrls=[]; }
+function editTrip(id){
+  const trip=trips.find(t=>t.id===id); if(!trip) return;
+  const html=`
+    <div class="form-grid">
+      <div class="field full"><label>Leg name</label><input id="f-name" value="${esc(trip.name)}"></div>
+      <div class="field full"><label>Voyage</label><select id="f-voyage"><option value="">— None —</option>${voyages.map(v=>`<option value="${v.id}" ${trip.voyageId===v.id?"selected":""}>${esc(v.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>Engine hours (this trip)</label><input id="f-engine" type="number" step="0.1" value="${trip.engineHours??""}"></div>
+      <div class="field"><label>Crew</label><input id="f-crew" value="${esc(trip.crew)}"></div>
+      <div class="field"><label>Weather</label><input id="f-weather" value="${esc(trip.weather)}" placeholder="e.g. Sunny, 18°C"></div>
+      <div class="field"><label>Wind</label><input id="f-wind" value="${esc(trip.wind)}" placeholder="e.g. NW 12 kn"></div>
+      <div class="field full"><label>Notes</label><textarea id="f-notes" placeholder="Log entry, highlights, issues…">${esc(trip.notes)}</textarea></div>
+      <div class="field full"><label>Photos</label><input id="f-photos" type="file" accept="image/*" multiple><div class="gallery" id="f-gallery"></div></div>
+    </div>
+    <div class="btnrow"><button class="btn" id="f-save">Save</button><button class="btn ghost" id="f-cancel">Cancel</button><span class="saved" id="f-saved">Saved ✓</span></div>`;
+  openModal("Log details — "+trip.name, html);
+  const gallery=document.getElementById("f-gallery");
+  let photos=(trip.photos||[]).slice();
+  function drawGallery(){
+    gallery.innerHTML=photos.map((p,i)=>`<div class="ph"><img src="${p.url}"><button data-i="${i}" title="Remove">×</button></div>`).join("");
+    gallery.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ photos.splice(+b.dataset.i,1); drawGallery(); }));
+  }
+  drawGallery();
+  document.getElementById("f-photos").addEventListener("change",async e=>{
+    for(const file of e.target.files){ const url=await resizeImage(file); if(url) photos.push({name:file.name,url}); }
+    e.target.value=""; drawGallery();
+  });
+  document.getElementById("f-cancel").addEventListener("click",()=>{ closeModal(); });
+  document.getElementById("f-save").addEventListener("click",async()=>{
+    trip.name=document.getElementById("f-name").value.trim()||trip.name;
+    const eh=parseFloat(document.getElementById("f-engine").value); trip.engineHours=isNaN(eh)?null:eh;
+    trip.crew=document.getElementById("f-crew").value.trim();
+    trip.weather=document.getElementById("f-weather").value.trim();
+    trip.wind=document.getElementById("f-wind").value.trim();
+    trip.notes=document.getElementById("f-notes").value.trim();
+    trip.voyageId=document.getElementById("f-voyage").value||null;
+    trip.photos=photos;
+    await idbPut("trips",trip);
+    closeModal(); render();
+  });
+}
+
+/* =================== motion & hero (GSAP + Three.js) =================== */
+const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const hasGSAP = () => !!window.gsap && !reduceMotion;
+function animateView(name){
+  if(!hasGSAP()) return;
+  const root=document.getElementById("view-"+name); if(!root) return;
+  const els=root.querySelectorAll(".statcard,.vcard,.cat-empty,#dashMap,.records .record");
+  if(els.length) gsap.fromTo(els,{opacity:0,y:18},{opacity:1,y:0,duration:.55,stagger:.05,ease:"power3.out",overwrite:true,clearProps:"opacity,transform"});
+}
+function countUp(root){
+  root.querySelectorAll("[data-count]").forEach(el=>{
+    const target=parseFloat(el.dataset.count)||0;
+    if(!hasGSAP()){ el.textContent=Math.round(target); return; }
+    const o={n:0}; gsap.to(o,{n:target,duration:1.1,ease:"power2.out",onUpdate:()=>{ el.textContent=Math.round(o.n); }});
+  });
+}
+// subtle animated sea wireframe behind the dashboard hero
+let heroState=null;
+function initHero(){
+  if(heroState||!window.THREE) return;
+  const canvas=document.getElementById("heroCanvas"); if(!canvas) return;
+  let renderer; try{ renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true}); }catch(e){ return; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(55,1,0.1,100);
+  camera.position.set(0,2.7,6); camera.lookAt(0,-0.7,0);
+  const geo=new THREE.PlaneGeometry(24,15,46,30);
+  const mat=new THREE.MeshBasicMaterial({color:0x8fc2e6,wireframe:true,transparent:true,opacity:0.26});
+  const mesh=new THREE.Mesh(geo,mat); mesh.rotation.x=-Math.PI/2.3; scene.add(mesh);
+  const base=geo.attributes.position.array.slice();
+  function resize(){ const w=canvas.clientWidth,h=canvas.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+  let t=0, raf=null;
+  function frame(){ t+=0.018; const p=geo.attributes.position.array;
+    for(let i=0;i<p.length;i+=3){ p[i+2]=Math.sin(base[i]*0.55+t)*0.5+Math.cos(base[i+1]*0.5+t*0.8)*0.4; }
+    geo.attributes.position.needsUpdate=true; renderer.render(scene,camera); raf=requestAnimationFrame(frame); }
+  resize(); window.addEventListener("resize",resize);
+  heroState={ start(){ resize(); if(reduceMotion){ renderer.render(scene,camera); return; } if(!raf) frame(); }, stop(){ if(raf){ cancelAnimationFrame(raf); raf=null; } } };
+  heroState.start();
+}
+document.addEventListener("visibilitychange",()=>{ if(!heroState) return; if(document.hidden) heroState.stop(); else if(!document.getElementById("view-dashboard").classList.contains("hidden")) heroState.start(); });
+
+/* =================== view switching =================== */
+let dashMap=null;
+function showView(name){
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("hidden",v.id!=="view-"+name));
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.v===name));
+  if(name==="voyages") setTimeout(()=>map.invalidateSize(),60);
+  if(name==="catalog") renderCatalog();
+  if(name==="dashboard"){ renderDashboard(); initHero(); }
+  if(name==="boat") renderBoat();
+  if(name==="maintenance") renderMaintenance();
+  if(name==="brochure") renderBrochure();
+  if(heroState){ if(name==="dashboard") heroState.start(); else heroState.stop(); }
+  animateView(name);
+}
+document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>showView(b.dataset.v)));
+
+/* ---- aggregate stats for dashboard/brochure ---- */
+function fleetStats(){
+  let dist=0, durMs=0, engine=0, stops=0; const days=new Set();
+  let longest=null, fastest=null;
+  trips.forEach(t=>{
+    const s=computeStats(t.points);
+    dist+=s.dist; if(s.durMs) durMs+=s.durMs;
+    if(t.engineHours) engine+=t.engineHours;
+    days.add(new Date(t.dateMs).toISOString().slice(0,10));
+    stops+=detectStops(t.points).length;
+    if(!longest||s.dist>longest.dist) longest={dist:s.dist,name:t.name,dateMs:t.dateMs};
+    if(s.avg!=null && (!fastest||s.avg>fastest.avg)) fastest={avg:s.avg,name:t.name,dateMs:t.dateMs};
+  });
+  return { dist, durMs, engine, stops, days:days.size, trips:trips.length, longest, fastest };
+}
+
+function renderCatalog(){
+  const el=document.getElementById("catalogPage");
+  let html=`<div class="cat-head"><div><h1>Voyages</h1><div class="lede" style="margin:3px 0 0">Your logbook, grouped by trip — each voyage holds the days you sailed.</div></div><button class="btn" id="cat-new">＋ New voyage</button></div>`;
+  const groups=voyages.map(v=>({v,legs:legsOf(v.id)}));
+  groups.sort((a,b)=>{ const am=a.legs.length?Math.min(...a.legs.map(l=>l.dateMs)):a.v.dateMs; const bm=b.legs.length?Math.min(...b.legs.map(l=>l.dateMs)):b.v.dateMs; return am-bm; });
+  if(!groups.length){
+    html+=`<div class="cat-empty"><div class="ce-ic">⚓</div><div class="ce-t">No voyages yet</div><div class="ce-s">Create a voyage (e.g. “Summer 2026”), then add legs from the Map tab or each leg’s details.</div></div>`;
+  } else {
+    groups.forEach(({v,legs})=>{
+      const ag=aggStats(legs);
+      const range=ag.start!=null?`${fmtDateShort(ag.start)} – ${fmtDateShort(ag.end)}`:"—";
+      html+=`<div class="vcard" data-vid="${v.id}">
+        <div class="vcard-accent"></div>
+        <div class="vcard-body">
+          <div class="vcard-top">
+            <div><div class="vcard-name">${esc(v.name)}</div><div class="vcard-date">${range}</div></div>
+            <div class="vcard-actions">
+              <button class="icb" data-open="${v.id}" title="Open on map">🗺</button>
+              <button class="icb" data-ren="${v.id}" title="Rename">✎</button>
+              <button class="icb danger" data-del="${v.id}" title="Delete">🗑</button>
+            </div>
+          </div>
+          <div class="vcard-stats">
+            <div class="vs"><div class="vs-v">${legs.length}</div><div class="vs-k">legs</div></div>
+            <div class="vs"><div class="vs-v">${ag.dist.toFixed(0)}<em>nm</em></div><div class="vs-k">distance</div></div>
+            <div class="vs"><div class="vs-v">${fmtDur(ag.durMs)}</div><div class="vs-k">underway</div></div>
+            <div class="vs"><div class="vs-v">${ag.days}</div><div class="vs-k">days</div></div>
+          </div>
+          <ul class="leglist">${legs.slice().sort((a,b)=>a.dateMs-b.dateMs).map((l,i)=>{const parts=(l.summary||"").split(" · ");return `<li class="legrow" draggable="true" data-leg="${l.id}"><span class="grip">⠿</span><span class="legno">${i+1}</span><div class="leginfo"><div class="legname">${esc(l.name)}</div><div class="legdate">${fmtDateShort(l.dateMs)}</div></div><div class="legstats"><span>${parts[0]||""}</span><span>${parts[1]||""}</span></div></li>`;}).join("")||'<li class="legrow-empty">No legs yet — add some from the Map tab.</li>'}</ul>
+        </div>
+      </div>`;
+    });
+  }
+  const un=trips.filter(t=>!t.voyageId||!voyages.some(v=>v.id===t.voyageId));
+  if(un.length){ html+=`<div class="vcard unassigned" data-vid="">
+    <div class="vcard-accent"></div>
+    <div class="vcard-body">
+      <div class="vcard-top"><div><div class="vcard-name">Unassigned</div><div class="vcard-date">${un.length} leg${un.length>1?"s":""} not in a voyage — drag them onto a voyage above</div></div></div>
+      <ul class="leglist">${un.slice().sort((a,b)=>a.dateMs-b.dateMs).map((l,i)=>{const parts=(l.summary||"").split(" · ");return `<li class="legrow" draggable="true" data-leg="${l.id}"><span class="grip">⠿</span><span class="legno">${i+1}</span><div class="leginfo"><div class="legname">${esc(l.name)}</div><div class="legdate">${fmtDateShort(l.dateMs)}</div></div><div class="legstats"><span>${parts[0]||""}</span><span>${parts[1]||""}</span></div></li>`;}).join("")}</ul>
+    </div>
+  </div>`; }
+  el.innerHTML=html;
+  // drag legs between voyage cards
+  el.querySelectorAll(".legrow[data-leg]").forEach(row=>{
+    row.addEventListener("dragstart",e=>{ dragLegId=row.dataset.leg; row.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{e.dataTransfer.setData("text/plain",row.dataset.leg);}catch(_){} });
+    row.addEventListener("dragend",()=>{ dragLegId=null; el.querySelectorAll(".dragging,.drop-target").forEach(x=>x.classList.remove("dragging","drop-target")); });
+  });
+  el.querySelectorAll("[data-vid]").forEach(card=>{
+    const vid=card.dataset.vid||null;
+    card.addEventListener("dragover",e=>{ if(dragLegId){ e.preventDefault(); e.dataTransfer.dropEffect="move"; card.classList.add("drop-target"); } });
+    card.addEventListener("dragleave",e=>{ if(!card.contains(e.relatedTarget)) card.classList.remove("drop-target"); });
+    card.addEventListener("drop",e=>{ e.preventDefault(); card.classList.remove("drop-target"); if(dragLegId) moveLegToVoyage(dragLegId, vid); });
+  });
+  document.getElementById("cat-new").addEventListener("click",async()=>{ const nm=prompt("Voyage name","Summer 2026"); if(nm&&nm.trim()){ await createVoyage(nm.trim()); renderCatalog(); render(); } });
+  el.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{ shown=new Set(legsOf(b.dataset.open).map(l=>l.id)); showView("voyages"); render(); }));
+  el.querySelectorAll("[data-ren]").forEach(b=>b.addEventListener("click",async()=>{ const v=voyages.find(x=>x.id===b.dataset.ren); const nm=prompt("Rename voyage",v?v.name:""); if(nm&&nm.trim()){ await renameVoyage(b.dataset.ren,nm.trim()); renderCatalog(); render(); } }));
+  el.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{ const v=voyages.find(x=>x.id===b.dataset.del); if(confirm(`Delete voyage “${v?v.name:""}”? Its legs are kept and become unassigned.`)){ await deleteVoyage(b.dataset.del); renderCatalog(); render(); } }));
+}
+
+function renderDashboard(){
+  const f=fleetStats();
+  const ht=document.getElementById("heroTitle"); if(ht) ht.textContent=boat.name||"Sailing Logbook";
+  const hs=document.getElementById("heroSub"); if(hs) hs.textContent=`${f.dist.toFixed(0)} nm across ${f.trips} leg${f.trips===1?"":"s"}${voyages.length?` · ${voyages.length} voyage${voyages.length>1?"s":""}`:""}`;
+  const cards=[
+    {num:f.dist, unit:"nm", k:"Total distance", accent:true},
+    {text:fmtDur(f.durMs), k:"Time underway"},
+    {num:voyages.length, k:"Voyages"},
+    {num:f.trips, k:"Legs"},
+    {num:f.days, k:"Days sailed"},
+    {num:f.engine||0, unit:f.engine?"h":"", k:"Engine hours"},
+    {num:f.stops, k:"Places visited"}
+  ];
+  let html=`<div class="cards">${cards.map(c=>{
+    const inner = c.text!=null ? c.text : `<span data-count="${Math.round(c.num)}">0</span>${c.unit?` <span>${c.unit}</span>`:""}`;
+    return `<div class="statcard ${c.accent?"accent":""}"><div class="v">${inner}</div><div class="k">${c.k}</div></div>`;
+  }).join("")}</div>`;
+  html+=`<div class="section"><h2>⚓ Records</h2><div class="records">
+    <div class="record"><span class="rk">Longest passage</span><span class="rv">${f.longest?f.longest.dist.toFixed(1)+" nm":"—"}</span><span class="rs">${f.longest?esc(f.longest.name)+" · "+fmtDateShort(f.longest.dateMs):""}</span></div>
+    <div class="record"><span class="rk">Fastest average</span><span class="rv">${f.fastest?f.fastest.avg.toFixed(1)+" kn":"—"}</span><span class="rs">${f.fastest?esc(f.fastest.name)+" · "+fmtDateShort(f.fastest.dateMs):""}</span></div>
+    <div class="record"><span class="rk">Avg trip length</span><span class="rv">${f.trips?(f.dist/f.trips).toFixed(1)+" nm":"—"}</span><span class="rs">across ${f.trips} voyages</span></div>
+  </div></div>`;
+  html+=`<div class="section"><h2>🗺 Cruising map</h2><div id="dashMap"></div></div>`;
+  document.getElementById("dashPage").innerHTML=html;
+  countUp(document.getElementById("dashPage"));
+  // cruising map
+  if(!dashMap){
+    dashMap=L.map("dashMap",{zoomControl:true,preferCanvas:true}).setView([56.2,11.1],7);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{maxZoom:20,subdomains:"abcd",attribution:"&copy; OSM &copy; CARTO"}).addTo(dashMap);
+  } else { dashMap.eachLayer(l=>{ if(l instanceof L.Polyline||l instanceof L.CircleMarker) dashMap.removeLayer(l); }); }
+  const all=[];
+  trips.forEach((t,i)=>{ const col=PALETTE[i%PALETTE.length];
+    L.polyline(t.points.map(p=>[p[0],p[1]]),{color:col,weight:3,opacity:.85}).addTo(dashMap);
+    t.points.forEach(p=>all.push([p[0],p[1]])); });
+  setTimeout(()=>{ dashMap.invalidateSize(); if(all.length) dashMap.fitBounds(L.latLngBounds(all),{padding:[40,40]}); },80);
+}
+
+/* ---- boat profile ---- */
+const BOAT_FIELDS=[["name","Boat name"],["make","Make / builder"],["model","Model"],["year","Year"],["loa","Length overall (LOA)"],["beam","Beam"],["draft","Draft"],["sailplan","Sail plan"],["engine","Engine"],["engineTotal","Engine hours (total)"],["hullId","Hull ID / HIN"],["flag","Home port / flag"]];
+function renderBoat(){
+  const b=boat;
+  let html=`<h1>Boat profile</h1><div class="lede">The spec sheet buyers will see on the brochure.</div><div class="section">`;
+  html+=`<div class="field full" style="margin-bottom:16px"><label>Hero photo</label><input id="b-hero" type="file" accept="image/*"><div class="gallery" id="b-herowrap" style="grid-template-columns:220px"></div></div>`;
+  html+=`<div class="form-grid">`;
+  BOAT_FIELDS.forEach(([k,lab])=>{ html+=`<div class="field"><label>${lab}</label><input id="b-${k}" value="${esc(b[k]||"")}"></div>`; });
+  html+=`<div class="field full"><label>Inventory & equipment</label><textarea id="b-inventory" placeholder="Electronics, safety gear, sails, ground tackle…">${esc(b.inventory||"")}</textarea></div>`;
+  html+=`<div class="field full"><label>Description</label><textarea id="b-desc" placeholder="A few lines about the boat…">${esc(b.desc||"")}</textarea></div>`;
+  html+=`</div><div class="btnrow"><button class="btn" id="b-save">Save profile</button><span class="saved" id="b-saved">Saved ✓</span></div></div>`;
+  document.getElementById("boatPage").innerHTML=html;
+  const herowrap=document.getElementById("b-herowrap");
+  function drawHero(){ if(b.hero){ herowrap.innerHTML=`<div class="ph"><img src="${b.hero}"><button title="Remove">×</button></div>`; herowrap.querySelector("button").addEventListener("click",async()=>{ b.hero=null; await idbPut("boat",b); drawHero(); }); } else herowrap.innerHTML=""; }
+  drawHero();
+  document.getElementById("b-hero").addEventListener("change",async e=>{ if(e.target.files[0]){ const u=await resizeImage(e.target.files[0],1800,.85); if(u){ b.hero=u; await idbPut("boat",b); drawHero(); } } e.target.value=""; });
+  document.getElementById("b-save").addEventListener("click",async()=>{
+    BOAT_FIELDS.forEach(([k])=>{ b[k]=document.getElementById("b-"+k).value.trim(); });
+    b.inventory=document.getElementById("b-inventory").value.trim();
+    b.desc=document.getElementById("b-desc").value.trim();
+    await idbPut("boat",b);
+    document.getElementById("boatname").textContent=b.name?("⛵ "+b.name):"";
+    const s=document.getElementById("b-saved"); s.classList.add("show"); setTimeout(()=>s.classList.remove("show"),1500);
+  });
+}
+
+/* ---- maintenance ---- */
+const MAINT_CATS=["Engine","Rigging","Sails","Hull","Electrical","Plumbing","Safety","Other"];
+function renderMaintenance(){
+  const rows=maint.slice().sort((a,b)=>b.dateMs-a.dateMs);
+  let html=`<h1>Maintenance log</h1><div class="lede">Service history — often the first thing a serious buyer asks for.</div>`;
+  html+=`<div class="btnrow" style="margin:0 0 16px"><button class="btn" id="m-add">+ Add record</button></div>`;
+  html+=`<div class="section">`;
+  if(!rows.length){ html+=`<div class="muted">No records yet. Add oil changes, new sails, rigging work, surveys…</div>`; }
+  else{
+    html+=`<table class="log"><thead><tr><th>Date</th><th>Category</th><th>Work done</th><th>Eng. h</th><th>Cost</th><th></th></tr></thead><tbody>`;
+    rows.forEach(r=>{ html+=`<tr>
+      <td>${fmtDateShort(r.dateMs)}</td>
+      <td><span class="cat">${esc(r.category)}</span></td>
+      <td>${esc(r.description)}${r.notes?`<div class="muted" style="font-size:11px">${esc(r.notes)}</div>`:""}</td>
+      <td>${r.hours||"—"}</td>
+      <td>${r.cost?esc(r.cost):"—"}</td>
+      <td class="rowbtns"><button data-edit="${r.id}" title="Edit">✎</button><button data-del="${r.id}" title="Delete">🗑</button></td></tr>`; });
+    html+=`</tbody></table>`;
+  }
+  html+=`</div>`;
+  document.getElementById("maintPage").innerHTML=html;
+  document.getElementById("m-add").addEventListener("click",()=>maintForm());
+  document.querySelectorAll("[data-edit]").forEach(b=>b.addEventListener("click",()=>maintForm(b.dataset.edit)));
+  document.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{ if(confirm("Delete this record?")){ await idbDel("maintenance",b.dataset.del); maint=maint.filter(m=>m.id!==b.dataset.del); renderMaintenance(); } }));
+}
+function maintForm(id){
+  const r=id?maint.find(m=>m.id===id):{dateMs:Date.now()};
+  const dateVal=new Date(r.dateMs).toISOString().slice(0,10);
+  const html=`<div class="form-grid">
+    <div class="field"><label>Date</label><input id="m-date" type="date" value="${dateVal}"></div>
+    <div class="field"><label>Category</label><select id="m-cat">${MAINT_CATS.map(c=>`<option ${r.category===c?"selected":""}>${c}</option>`).join("")}</select></div>
+    <div class="field full"><label>Work done</label><input id="m-desc" value="${esc(r.description||"")}"></div>
+    <div class="field"><label>Engine hours</label><input id="m-hours" type="number" step="0.1" value="${r.hours??""}"></div>
+    <div class="field"><label>Cost</label><input id="m-cost" value="${esc(r.cost||"")}" placeholder="e.g. 4,200 DKK"></div>
+    <div class="field full"><label>Notes</label><textarea id="m-notes">${esc(r.notes||"")}</textarea></div>
+  </div><div class="btnrow"><button class="btn" id="m-save">Save</button><button class="btn ghost" id="m-cancel">Cancel</button></div>`;
+  openModal(id?"Edit record":"Add maintenance record",html);
+  document.getElementById("m-cancel").addEventListener("click",closeModal);
+  document.getElementById("m-save").addEventListener("click",async()=>{
+    const rec={ id:id||("m"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
+      dateMs:new Date(document.getElementById("m-date").value||Date.now()).getTime(),
+      category:document.getElementById("m-cat").value,
+      description:document.getElementById("m-desc").value.trim(),
+      hours:parseFloat(document.getElementById("m-hours").value)||null,
+      cost:document.getElementById("m-cost").value.trim(),
+      notes:document.getElementById("m-notes").value.trim() };
+    await idbPut("maintenance",rec);
+    maint=maint.filter(m=>m.id!==rec.id); maint.push(rec);
+    closeModal(); renderMaintenance();
+  });
+}
+
+/* ---- brochure ---- */
+function renderBrochure(){
+  const b=boat, f=fleetStats();
+  const heroUrl=b.hero||null;
+  const specPairs=[["Make",b.make],["Model",b.model],["Year",b.year],["LOA",b.loa],["Beam",b.beam],["Draft",b.draft],["Sail plan",b.sailplan],["Engine",b.engine],["Engine hours",b.engineTotal],["Home port",b.flag],["Hull ID",b.hullId]].filter(p=>p[1]);
+  // gather a few trip photos
+  const photos=[]; trips.forEach(t=>(t.photos||[]).forEach(p=>{ if(photos.length<6) photos.push(p.url); }));
+  const recentMaint=maint.slice().sort((a,b)=>b.dateMs-a.dateMs).slice(0,6);
+
+  let html=`<div class="br-toolbar"><button class="btn ghost" onclick="window.print()">🖨 Print / Save as PDF</button></div><div id="brochure">`;
+  html+=`<div class="br-hero ${heroUrl?"haspic":""}">`;
+  if(heroUrl){ html+=`<img class="heropic" src="${heroUrl}"><div class="overlay"><h1>${esc(b.name||"Our boat")}</h1><div class="sub">${[b.make,b.model,b.year].filter(Boolean).map(esc).join(" · ")}</div></div>`; }
+  else { html+=`<h1>${esc(b.name||"Our boat")}</h1><div class="sub">${[b.make,b.model,b.year].filter(Boolean).map(esc).join(" · ")||"Add details on the Boat page"}</div>`; }
+  html+=`</div><div class="br-body">`;
+  if(b.desc) html+=`<p class="muted" style="font-size:14px;line-height:1.6">${esc(b.desc)}</p>`;
+  html+=`<h2>On the log</h2><div class="br-stats">
+    <div class="bs"><div class="v">${f.dist.toFixed(0)}</div><div class="k">nautical miles</div></div>
+    <div class="bs"><div class="v">${Math.round((f.durMs||0)/3600000)}</div><div class="k">hours underway</div></div>
+    <div class="bs"><div class="v">${f.trips}</div><div class="k">voyages</div></div>
+    <div class="bs"><div class="v">${f.engine?f.engine.toFixed(0):(b.engineTotal||"—")}</div><div class="k">engine hours</div></div></div>`;
+  if(specPairs.length){ html+=`<h2>Specifications</h2><div class="spec">${specPairs.map(p=>`<div class="s"><div class="sk">${esc(p[0])}</div><div class="sv">${esc(p[1])}</div></div>`).join("")}</div>`; }
+  if(b.inventory){ html+=`<h2>Equipment & inventory</h2><p class="muted" style="font-size:14px;line-height:1.6;white-space:pre-wrap">${esc(b.inventory)}</p>`; }
+  if(recentMaint.length){ html+=`<h2>Recent maintenance</h2><table class="log"><tbody>${recentMaint.map(r=>`<tr><td style="width:110px">${fmtDateShort(r.dateMs)}</td><td><span class="cat">${esc(r.category)}</span></td><td>${esc(r.description)}</td></tr>`).join("")}</tbody></table>`; }
+  if(photos.length){ html+=`<h2>Gallery</h2><div class="br-gallery">${photos.map(u=>`<img src="${u}">`).join("")}</div>`; }
+  html+=`</div></div>`;
+  document.getElementById("brochurePage").innerHTML=html;
+}
+
+/* =================== wiring =================== */
+const drop=document.getElementById("drop"), fileInput=document.getElementById("file");
+drop.addEventListener("click",()=>fileInput.click());
+fileInput.addEventListener("change",e=>{ addFiles(e.target.files); fileInput.value=""; });
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.add("drag"); }));
+["dragleave","dragend"].forEach(ev=>drop.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove("drag"); }));
+drop.addEventListener("drop",e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove("drag"); addFiles(e.dataTransfer.files); });
+// stop the browser from opening a file dropped outside the drop zone (no visual)
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>e.preventDefault());
+document.getElementById("mergeBtn").addEventListener("click",()=>{ if(shown.size<2){ alert("Show at least two legs (click them in the list) to merge them into one."); return; } mergeTrips(new Set(shown)); });
+document.getElementById("assignVoyage").addEventListener("click",()=>{ if(!shown.size){ alert("Show the legs you want to group (click them in the list), then add them to a voyage."); return; } assignModal([...shown]); });
+document.getElementById("showAll").addEventListener("click",()=>{ shown=new Set(trips.map(t=>t.id)); render(); });
+document.getElementById("clearAll").addEventListener("click",()=>{ shown.clear(); render(); });
+document.getElementById("sortSel").addEventListener("change",e=>{ sortMode=e.target.value; renderList(); });
+document.getElementById("playBtn").addEventListener("click",togglePlayback);
+document.getElementById("editTripBtn").addEventListener("click",()=>{ if(currentTripId) editTrip(currentTripId); });
+
+/* =================== init & migration =================== */
+async function migrateFromLocalStorage(){
+  const flag=await idbGet("meta","migrated"); if(flag) return;
+  try{
+    const raw=localStorage.getItem("sailing_log_trips_v1");
+    if(raw){ const old=JSON.parse(raw)||[];
+      for(const t of old){ const s=computeStats(t.points);
+        const trip=Object.assign({distNm:+s.dist.toFixed(2),durMs:s.durMs,engineHours:null,crew:"",weather:"",wind:"",notes:"",photos:[]},t);
+        await idbPut("trips",trip);
+      }
+      localStorage.removeItem("sailing_log_trips_v1");
+    }
+  }catch(e){ console.warn("migration skipped",e); }
+  await idbPut("meta",{k:"migrated",v:true});
+}
+
+async function init(){
+  await openStore();
+  await migrateFromLocalStorage();
+  trips=await idbAll("trips");
+  boat=(await idbGet("boat","profile"))||{id:"profile"};
+  maint=await idbAll("maintenance");
+  voyages=await idbAll("voyages");
+  const hb=await idbGet("meta","harbourKn"); if(hb && hb.v) harbourThreshold=hb.v;
+  document.getElementById("boatname").textContent=boat.name?("⛵ "+boat.name):"";
+  if(trips.length){ shown=new Set([ trips.slice().sort((a,b)=>b.dateMs-a.dateMs)[0].id ]); }
+  render();
+  showView("dashboard");
+}
+init();
+</script>
+</body>
+</html>
