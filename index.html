@@ -50,6 +50,11 @@
   .login-card input:focus{outline:none; border-color:var(--steel); box-shadow:0 0 0 3px rgba(61,106,146,.14)}
   .login-card .btn{width:100%; justify-content:center}
   #login-err{color:#c0392b; font-size:12px; margin-top:12px; opacity:0; transition:.2s; min-height:14px}
+  .login-link{display:inline-block; margin-top:12px; font-size:12px; color:var(--steel); text-decoration:none}
+  .login-link:hover{text-decoration:underline}
+  #setpw{position:fixed; inset:0; z-index:4000; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#08213a,#123a5c)}
+  #setpw.hidden{display:none}
+  #setpw-err{color:#c0392b; font-size:12px; margin-top:12px; min-height:14px}
 
   #views{height:calc(100vh - 56px); position:relative}
   .view{position:absolute; inset:0; overflow:auto}
@@ -385,7 +390,21 @@
       <input id="login-email" type="email" placeholder="Email" autocomplete="username" />
       <input id="login-pw" type="password" placeholder="Password" autocomplete="current-password" />
       <button id="login-btn" class="btn">Sign in</button>
+      <a id="forgot" href="#" class="login-link">Forgot password?</a>
       <div id="login-err"></div>
+    </div>
+  </div>
+
+  <!-- set password (invite acceptance / reset) -->
+  <div id="setpw" class="hidden">
+    <div class="login-card">
+      <div class="login-wheel"><svg viewBox="0 0 24 24" fill="none" stroke="#7fb3d5" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/></svg></div>
+      <h2>Choose a password</h2>
+      <p>Set a password for your crew account.</p>
+      <input id="setpw-1" type="password" placeholder="New password" autocomplete="new-password" />
+      <input id="setpw-2" type="password" placeholder="Confirm password" autocomplete="new-password" />
+      <button id="setpw-btn" class="btn">Set password</button>
+      <div id="setpw-err"></div>
     </div>
   </div>
 
@@ -394,6 +413,7 @@
 
 <script>
 "use strict";
+const AUTH_HASH = location.hash || "";   // captured before Supabase strips it (invite/reset links)
 
 /* =================== Supabase storage layer =================== */
 // Public config. The publishable key is safe to expose; row-level security +
@@ -1257,15 +1277,48 @@ async function doLogin(){
   if(error){ showLogin((error.message||"Sign-in failed")+" — check your email and password."); return; }
   hideLogin(); await loadAll();
 }
+function openSetPassword(){
+  document.getElementById("login").classList.add("hidden");
+  const s=document.getElementById("setpw"); s.classList.remove("hidden");
+  const i=document.getElementById("setpw-1"); if(i) i.focus();
+}
+async function doSetPassword(){
+  const p1=document.getElementById("setpw-1").value, p2=document.getElementById("setpw-2").value;
+  const err=document.getElementById("setpw-err");
+  if(p1.length<6){ err.textContent="Password must be at least 6 characters."; return; }
+  if(p1!==p2){ err.textContent="Passwords don't match."; return; }
+  const btn=document.getElementById("setpw-btn"); btn.disabled=true; btn.textContent="Saving…";
+  let error; try{ ({ error } = await sb.auth.updateUser({ password:p1 })); }catch(e){ error=e; }
+  btn.disabled=false; btn.textContent="Set password";
+  if(error){ err.textContent=error.message||"Couldn't set password."; return; }
+  history.replaceState(null,"",location.pathname+location.search);
+  document.getElementById("setpw").classList.add("hidden");
+  await loadAll();
+}
+async function doForgot(e){
+  e.preventDefault();
+  const email=document.getElementById("login-email").value.trim();
+  const err=document.getElementById("login-err");
+  if(!email){ showLogin("Enter your email above first, then tap Forgot password."); return; }
+  let error; try{ ({ error } = await sb.auth.resetPasswordForEmail(email,{ redirectTo:location.origin })); }catch(e2){ error=e2; }
+  err.textContent = error ? (error.message||"Couldn't send reset email.") : "Sent — check your email for a reset link.";
+  err.style.opacity=1;
+}
 async function init(){
   initSupabase();
+  sb.auth.onAuthStateChange((event)=>{ if(event==="PASSWORD_RECOVERY") openSetPassword(); });
   document.getElementById("login-btn").addEventListener("click",doLogin);
   document.getElementById("login-pw").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
   document.getElementById("login-email").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("login-pw").focus(); });
+  document.getElementById("forgot").addEventListener("click",doForgot);
+  document.getElementById("setpw-btn").addEventListener("click",doSetPassword);
+  document.getElementById("setpw-2").addEventListener("keydown",e=>{ if(e.key==="Enter") doSetPassword(); });
   document.getElementById("logoutBtn").addEventListener("click",async()=>{ await sb.auth.signOut(); location.reload(); });
   try{
+    const isInviteOrReset=/type=(invite|recovery|signup)/.test(AUTH_HASH);
     const { data:{ session } } = await sb.auth.getSession();
-    if(session){ hideLogin(); await loadAll(); }
+    if(session && isInviteOrReset){ openSetPassword(); }
+    else if(session){ hideLogin(); await loadAll(); }
     else showLogin();
   }catch(e){ console.error(e); showLogin("Couldn't reach the server — check your connection."); }
 }
