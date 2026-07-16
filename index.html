@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --navy:#0b2942; --navy2:#123a5c; --steel:#3d6a92; --sky:#7fb3d5;
@@ -37,6 +38,18 @@
   #nav button.active{background:rgba(127,179,213,.22); color:#fff}
   #topbar .spacer{flex:1}
   #boatname{font-size:13px; color:var(--sky)}
+  #logoutBtn{background:rgba(255,255,255,.08); color:var(--sky); border:1px solid rgba(255,255,255,.14); border-radius:8px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:.12s}
+  #logoutBtn:hover{background:rgba(255,255,255,.16); color:#fff}
+  #login{position:fixed; inset:0; z-index:4000; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#08213a,#123a5c)}
+  #login.hidden{display:none}
+  .login-card{width:100%; max-width:340px; background:#fff; border-radius:18px; padding:34px 30px; box-shadow:0 24px 70px rgba(0,0,0,.45); text-align:center}
+  .login-wheel svg{width:44px; height:44px}
+  .login-card h2{font-size:22px; color:var(--navy); margin:8px 0 4px; font-weight:800}
+  .login-card p{font-size:13px; color:var(--muted); margin-bottom:18px}
+  .login-card input{width:100%; border:1px solid var(--line); border-radius:10px; padding:11px 13px; font-size:15px; margin-bottom:12px; text-align:center}
+  .login-card input:focus{outline:none; border-color:var(--steel); box-shadow:0 0 0 3px rgba(61,106,146,.14)}
+  .login-card .btn{width:100%; justify-content:center}
+  #login-err{color:#c0392b; font-size:12px; margin-top:12px; opacity:0; transition:.2s; min-height:14px}
 
   #views{height:calc(100vh - 56px); position:relative}
   .view{position:absolute; inset:0; overflow:auto}
@@ -293,6 +306,7 @@
     </nav>
     <div class="spacer"></div>
     <div id="boatname"></div>
+    <button id="logoutBtn" title="Log out" style="display:none">Log out</button>
   </header>
 
   <div id="views">
@@ -362,53 +376,55 @@
     <section id="view-brochure" class="view hidden"><div class="page" id="brochurePage"></div></section>
   </div>
 
+  <!-- login gate -->
+  <div id="login">
+    <div class="login-card">
+      <div class="login-wheel"><svg viewBox="0 0 24 24" fill="none" stroke="#7fb3d5" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/></svg></div>
+      <h2>Sailing Log</h2>
+      <p>Enter the crew password to open the logbook.</p>
+      <input id="login-pw" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="login-btn" class="btn">Enter</button>
+      <div id="login-err"></div>
+    </div>
+  </div>
+
   <!-- modal -->
   <div id="modal"><div class="modal-box"><div class="modal-head"><h3 id="modalTitle"></h3><button id="modalClose">&times;</button></div><div class="modal-body" id="modalBody"></div></div></div>
 
 <script>
 "use strict";
 
-/* =================== IndexedDB layer =================== */
-const DB_NAME = "sailinglog", DB_VER = 2;
-let db=null, useIDB=false;
-function openIDB(){
-  return new Promise((res,rej)=>{
-    let r; try{ r=indexedDB.open(DB_NAME,DB_VER); }catch(e){ return rej(e); }
-    r.onupgradeneeded = e => {
-      const d = e.target.result;
-      if(!d.objectStoreNames.contains("trips")) d.createObjectStore("trips",{keyPath:"id"});
-      if(!d.objectStoreNames.contains("boat")) d.createObjectStore("boat",{keyPath:"id"});
-      if(!d.objectStoreNames.contains("maintenance")) d.createObjectStore("maintenance",{keyPath:"id"});
-      if(!d.objectStoreNames.contains("meta")) d.createObjectStore("meta",{keyPath:"k"});
-      if(!d.objectStoreNames.contains("voyages")) d.createObjectStore("voyages",{keyPath:"id"});
-    };
-    r.onsuccess = e => { db = e.target.result; res(db); };
-    r.onerror = () => rej(r.error);
-    r.onblocked = () => rej(new Error("blocked"));
-  });
+/* =================== Supabase storage layer =================== */
+// Public config. The publishable key is safe to expose; row-level security +
+// the shared login are what protect the data.
+const SUPABASE_URL = "https://loxrbkckhlkrbfscxiat.supabase.co";
+const SUPABASE_KEY = "sb_publishable_0nTrHZDals3kKNbyjGbgYg_Av14zKP5";
+const SHARED_EMAIL = "crew@sailinglog.app";
+let sb = null;
+const TABLE = { trips:"legs", boat:"boats", maintenance:"maintenance", meta:"meta", voyages:"voyages" };
+const PKCOL = name => name==="meta" ? "k" : "id";
+function initSupabase(){ sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
+// same interface the rest of the app already uses, now backed by the cloud DB
+async function idbAll(name){
+  const { data, error } = await sb.from(TABLE[name]).select("doc");
+  if(error) throw error;
+  return (data||[]).map(r=>r.doc).filter(Boolean);
 }
-const _store=(name,mode="readonly")=>db.transaction(name,mode).objectStore(name);
-const _all=name=>new Promise((res,rej)=>{ const r=_store(name).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
-const _get=(name,key)=>new Promise((res,rej)=>{ const r=_store(name).get(key); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
-const _put=(name,val)=>new Promise((res,rej)=>{ const r=_store(name,"readwrite").put(val); r.onsuccess=()=>res(val); r.onerror=()=>rej(r.error); });
-const _del=(name,key)=>new Promise((res,rej)=>{ const r=_store(name,"readwrite").delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); });
-
-// localStorage fallback — IndexedDB is commonly disabled when opening a page as a local file (file://)
-const LS_KEY="sailinglog_store_v1";
-let lsData={trips:{},boat:{},maintenance:{},meta:{},voyages:{}};
-const keyField=name=>name==="meta"?"k":"id";
-function lsLoad(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)); if(d) lsData=Object.assign({trips:{},boat:{},maintenance:{},meta:{},voyages:{}},d); }catch(e){} }
-function lsSave(){ try{ localStorage.setItem(LS_KEY,JSON.stringify(lsData)); return true; }catch(e){ alert("Couldn't save — the browser's local storage is full. Try removing some photos, or use fewer/larger-compressed images."); return false; } }
-
-async function openStore(){
-  try{ await openIDB(); useIDB=true; }
-  catch(e){ useIDB=false; console.warn("IndexedDB unavailable — using localStorage fallback.",e); }
-  lsLoad();
+async function idbGet(name,key){
+  const { data, error } = await sb.from(TABLE[name]).select("doc").eq(PKCOL(name), key).maybeSingle();
+  if(error) throw error;
+  return data ? data.doc : undefined;
 }
-const idbAll = async name => useIDB ? _all(name) : Object.values(lsData[name]||{});
-const idbGet = async (name,key) => useIDB ? _get(name,key) : (lsData[name]||{})[key];
-const idbPut = async (name,val) => { if(useIDB) return _put(name,val); (lsData[name]=lsData[name]||{})[val[keyField(name)]]=val; lsSave(); return val; };
-const idbDel = async (name,key) => { if(useIDB) return _del(name,key); delete (lsData[name]||{})[key]; lsSave(); };
+async function idbPut(name,val){
+  const pk = name==="meta" ? val.k : val.id;
+  const { error } = await sb.from(TABLE[name]).upsert({ [PKCOL(name)]: pk, doc: val });
+  if(error) throw error;
+  return val;
+}
+async function idbDel(name,key){
+  const { error } = await sb.from(TABLE[name]).delete().eq(PKCOL(name), key);
+  if(error) throw error;
+}
 
 /* =================== app state =================== */
 let trips = [];
@@ -1209,34 +1225,45 @@ document.getElementById("sortSel").addEventListener("change",e=>{ sortMode=e.tar
 document.getElementById("playBtn").addEventListener("click",togglePlayback);
 document.getElementById("editTripBtn").addEventListener("click",()=>{ if(currentTripId) editTrip(currentTripId); });
 
-/* =================== init & migration =================== */
-async function migrateFromLocalStorage(){
-  const flag=await idbGet("meta","migrated"); if(flag) return;
-  try{
-    const raw=localStorage.getItem("sailing_log_trips_v1");
-    if(raw){ const old=JSON.parse(raw)||[];
-      for(const t of old){ const s=computeStats(t.points);
-        const trip=Object.assign({distNm:+s.dist.toFixed(2),durMs:s.durMs,engineHours:null,crew:"",weather:"",wind:"",notes:"",photos:[]},t);
-        await idbPut("trips",trip);
-      }
-      localStorage.removeItem("sailing_log_trips_v1");
-    }
-  }catch(e){ console.warn("migration skipped",e); }
-  await idbPut("meta",{k:"migrated",v:true});
-}
-
-async function init(){
-  await openStore();
-  await migrateFromLocalStorage();
+/* =================== init & auth =================== */
+async function loadAll(){
   trips=await idbAll("trips");
   boat=(await idbGet("boat","profile"))||{id:"profile"};
   maint=await idbAll("maintenance");
   voyages=await idbAll("voyages");
   const hb=await idbGet("meta","harbourKn"); if(hb && hb.v) harbourThreshold=hb.v;
   document.getElementById("boatname").textContent=boat.name?("⛵ "+boat.name):"";
+  document.getElementById("logoutBtn").style.display="";
   if(trips.length){ shown=new Set([ trips.slice().sort((a,b)=>b.dateMs-a.dateMs)[0].id ]); }
   render();
   showView("dashboard");
+}
+function showLogin(msg){
+  const l=document.getElementById("login"); l.classList.remove("hidden");
+  if(msg){ const e=document.getElementById("login-err"); e.textContent=msg; e.style.opacity=1; }
+  const pw=document.getElementById("login-pw"); if(pw) pw.focus();
+}
+function hideLogin(){ document.getElementById("login").classList.add("hidden"); }
+async function doLogin(){
+  const pw=document.getElementById("login-pw").value;
+  const btn=document.getElementById("login-btn"); btn.disabled=true; btn.textContent="Signing in…";
+  let error;
+  try{ ({ error } = await sb.auth.signInWithPassword({ email:SHARED_EMAIL, password:pw })); }
+  catch(e){ error=e; }
+  btn.disabled=false; btn.textContent="Enter";
+  if(error){ showLogin("That password didn't work — try again."); return; }
+  hideLogin(); await loadAll();
+}
+async function init(){
+  initSupabase();
+  document.getElementById("login-btn").addEventListener("click",doLogin);
+  document.getElementById("login-pw").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+  document.getElementById("logoutBtn").addEventListener("click",async()=>{ await sb.auth.signOut(); location.reload(); });
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){ hideLogin(); await loadAll(); }
+    else showLogin();
+  }catch(e){ console.error(e); showLogin("Couldn't reach the server — check your connection."); }
 }
 init();
 </script>
