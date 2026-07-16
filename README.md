@@ -1,88 +1,99 @@
-# Sailing Log (Working Title)
+# Sailing Log
 
-A self-contained web logbook for sailing trips. Upload a GPX track and get a
-nautical map, per-leg stats (distance, duration, voyage vs harbour speed),
-anchorage detection, voyage playback, photos and notes, a maintenance log, and
-a buyer-facing brochure. Trips are grouped into multi-day **voyages** to build a
+A web logbook for sailing trips. Upload a GPX track and get a nautical map,
+per-leg stats (distance, duration, voyage vs harbour speed), anchorage
+detection, voyage playback, photos and notes, a maintenance log, and a
+buyer-facing brochure. Legs are grouped into multi-day **voyages** to build a
 year-over-year catalogue.
 
-The whole app is a single file: `index.html` (vanilla JS + Leaflet + GSAP +
-Three.js, all loaded from CDN). No build step.
+The whole app is one file — `index.html` — vanilla JS + Leaflet + GSAP +
+Three.js + the Supabase client, all from CDNs. No build step.
+
+- **Live:** https://sailing-log.vercel.app
+- **Repo:** https://github.com/Amdisen/sailing-log
+- **Data:** Supabase (Postgres + Auth). Login required.
 
 ---
 
-## Status / roadmap
+## Start here next time (local preview)
 
-- **Phase 1 (now): Git + Vercel.** Deploy the current app to a public URL.
-  Data is still stored per-browser (IndexedDB, with a localStorage fallback), so
-  it lives on whichever device you open it on.
-- **Phase 2 (next): Supabase.** Move trips, voyages, maintenance and photos to a
-  shared cloud database + storage, add a login (shared password first, real user
-  accounts later), and a public read-only brochure link for buyers.
+1. Double-click **`start-dev.bat`** (or in a terminal: `npx -y serve -l 8000`).
+2. Open **http://localhost:8000** and log in.
+3. Edit `index.html`, then hard-refresh the browser (Ctrl+Shift+R) to see changes.
 
----
+Tip: keep the server in its own terminal window and use a **second** terminal
+for git — running `git` in the server's window stops the preview.
+If port 8000 is busy: `npx -y serve -l 8001`.
 
-## Phase 1 — put it online
+## Ship changes (deploy)
 
-### 1. Version control (Git + GitHub)
+From a terminal in this folder:
 
-Run these in a terminal, inside this folder:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: sailing log app"
+```powershell
+git add -A
+git commit -m "what changed"
+git push
 ```
 
-Create an empty repo on GitHub (no README/licence, to avoid conflicts):
-<https://github.com/new> — name it e.g. `sailing-log`. Then connect and push
-(replace YOUR-USERNAME):
-
-```bash
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/sailing-log.git
-git push -u origin main
-```
-
-### 2. Deploy (Vercel)
-
-1. Go to <https://vercel.com/new> and sign in with GitHub.
-2. Import the `sailing-log` repository.
-3. Framework preset: **Other**. Build command: **none**. Output directory:
-   leave as the repo root (`./`). It's a static site, so no configuration is
-   needed.
-4. Click **Deploy**. You'll get a live URL like
-   `https://sailing-log.vercel.app`.
-
-Every `git push` to `main` afterwards redeploys automatically.
+Vercel auto-deploys `main` in ~20s. Check https://sailing-log.vercel.app.
 
 ---
 
-## Phase 2 — shared data (Supabase) — preview
+## Project layout
 
-When we're ready, this is the shape of it:
+- `index.html` — the entire app (UI, map, logic, Supabase data layer, auth).
+- `supabase/schema.sql` — database tables + row-level security. Run once in the
+  Supabase SQL editor; safe to re-run.
+- `vercel.json` — static hosting config.
+- `start-dev.bat` — local preview launcher.
 
-- A Supabase project provides a Postgres database + file storage + auth.
-- Tables: `boats`, `voyages`, `legs` (the daily tracks), `maintenance`.
-- A storage bucket holds photos.
-- The app's storage layer (currently IndexedDB/localStorage) is swapped for the
-  Supabase JS client. Keys go in Vercel environment variables — never committed.
-- Access starts as a single shared password, then upgrades to per-user accounts.
+## Architecture
 
-The SQL schema and integration will be added under `supabase/` in Phase 2.
+- **Git → GitHub → Vercel:** every push to `main` redeploys the static site.
+- **Supabase:** Postgres tables `boats`, `voyages`, `legs`, `maintenance`,
+  `meta` (each stores a JSON `doc`), plus Auth. The app's storage layer talks to
+  these via the Supabase JS client. The publishable key + URL are in `index.html`
+  (safe to expose — row-level security + login protect the data).
+
+## Managing users (admin)
+
+No public sign-up. Add crew in Supabase → **Authentication → Users → Add user →
+Create new user**: their email + a password + tick **Auto Confirm User**. Give
+them that email/password; they log in on the site.
+(An invite-by-email flow exists in the app but needs custom SMTP to send —
+skipped for now; see roadmap.)
+
+Auth email links (invites/resets) use **Authentication → URL Configuration →
+Site URL** = `https://sailing-log.vercel.app`.
 
 ---
 
-## Local development
+## Status
 
-Because browsers block some features on `file://`, run a tiny local server
-instead of double-clicking the file:
+Done:
+- Phase 1: Git + GitHub + Vercel (live, auto-deploy).
+- Phase 2: Supabase cloud storage + email/password login (+ invite/reset flow
+  in-app, pending SMTP).
+- Core app: GPX upload/parse, speed-coloured track, anchorage detection,
+  voyage playback, hover tooltips, per-leg details (engine hours, crew, weather,
+  notes, photos), boat profile, maintenance log, buyer brochure with print/PDF.
+- Voyages layer: catalogue tab + grouped list, drag-and-drop legs between
+  voyages (sidebar and catalogue).
+- Design: consistent design system, Emil-Kowalski motion rules, Apple design
+  pass (frosted materials, optical Inter typography, reduced-motion/transparency),
+  full mobile responsive pass + burger menu + reworked mobile Map view.
 
-```bash
-# any one of these, from this folder:
-npx serve .
-# or
-python -m http.server 8000
-```
+## Roadmap / next
 
-Then open the printed `http://localhost:...` URL.
+- Photos → Supabase Storage (keep the DB light as galleries grow).
+- Public read-only brochure link per voyage (share with buyers, no login).
+- Invite-by-email: connect custom SMTP (e.g. Resend) so invites/resets send.
+- Mobile Map polish: tap-to-collapse info sheet; layer control as a single icon.
+- Real per-user accounts / invite-code sign-up (currently one shared logbook for
+  all logged-in users).
+
+## Notes / gotchas
+
+- Map tiles, fonts, and libraries load from CDNs, so the app needs internet.
+- The five Summer 2026 GPX files were consolidated locally; re-upload them on the
+  live site if the cloud logbook is empty (cloud started fresh).
