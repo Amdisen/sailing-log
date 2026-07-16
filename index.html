@@ -381,9 +381,10 @@
     <div class="login-card">
       <div class="login-wheel"><svg viewBox="0 0 24 24" fill="none" stroke="#7fb3d5" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.8 2.8M15.2 15.2 18 18M18 6l-2.8 2.8M8.8 15.2 6 18"/></svg></div>
       <h2>Sailing Log</h2>
-      <p>Enter the crew password to open the logbook.</p>
+      <p>Sign in to open the logbook.</p>
+      <input id="login-email" type="email" placeholder="Email" autocomplete="username" />
       <input id="login-pw" type="password" placeholder="Password" autocomplete="current-password" />
-      <button id="login-btn" class="btn">Enter</button>
+      <button id="login-btn" class="btn">Sign in</button>
       <div id="login-err"></div>
     </div>
   </div>
@@ -1241,23 +1242,26 @@ async function loadAll(){
 function showLogin(msg){
   const l=document.getElementById("login"); l.classList.remove("hidden");
   if(msg){ const e=document.getElementById("login-err"); e.textContent=msg; e.style.opacity=1; }
-  const pw=document.getElementById("login-pw"); if(pw) pw.focus();
+  const em=document.getElementById("login-email"); if(em && !em.value) em.focus(); else { const pw=document.getElementById("login-pw"); if(pw) pw.focus(); }
 }
 function hideLogin(){ document.getElementById("login").classList.add("hidden"); }
 async function doLogin(){
+  const email=document.getElementById("login-email").value.trim();
   const pw=document.getElementById("login-pw").value;
+  if(!email || !pw){ showLogin("Enter your email and password."); return; }
   const btn=document.getElementById("login-btn"); btn.disabled=true; btn.textContent="Signing in…";
   let error;
-  try{ ({ error } = await sb.auth.signInWithPassword({ email:SHARED_EMAIL, password:pw })); }
+  try{ ({ error } = await sb.auth.signInWithPassword({ email, password:pw })); }
   catch(e){ error=e; }
-  btn.disabled=false; btn.textContent="Enter";
-  if(error){ showLogin("That password didn't work — try again."); return; }
+  btn.disabled=false; btn.textContent="Sign in";
+  if(error){ showLogin((error.message||"Sign-in failed")+" — check your email and password."); return; }
   hideLogin(); await loadAll();
 }
 async function init(){
   initSupabase();
   document.getElementById("login-btn").addEventListener("click",doLogin);
   document.getElementById("login-pw").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+  document.getElementById("login-email").addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("login-pw").focus(); });
   document.getElementById("logoutBtn").addEventListener("click",async()=>{ await sb.auth.signOut(); location.reload(); });
   try{
     const { data:{ session } } = await sb.auth.getSession();
