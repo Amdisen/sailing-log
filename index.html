@@ -6,6 +6,9 @@
 <title>Sailing Log</title>
 <!-- Sailing Log — v1 -->
 <meta name="app" content="sailing-log" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -16,10 +19,11 @@
     --navy:#0b2942; --navy2:#123a5c; --steel:#3d6a92; --sky:#7fb3d5;
     --foam:#eaf2f8; --sand:#f4efe6; --line:#d8e2ea; --ink:#12222f;
     --accent:#e8743b; --ok:#2e9e6b; --muted:#6f8598; --card:#ffffff;
+    --ease-out:cubic-bezier(0.23,1,0.32,1); --ease-in-out:cubic-bezier(0.77,0,0.175,1);
   }
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--foam); height:100vh; overflow:hidden}
+  body{font-family:"Inter",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--foam); height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; font-optical-sizing:auto}
   button{font-family:inherit}
 
   /* ---------- top bar ---------- */
@@ -42,14 +46,21 @@
   #logoutBtn:hover{background:rgba(255,255,255,.16); color:#fff}
   #login{position:fixed; inset:0; z-index:4000; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#08213a,#123a5c)}
   #login.hidden{display:none}
-  .login-card{width:100%; max-width:340px; background:#fff; border-radius:18px; padding:34px 30px; box-shadow:0 24px 70px rgba(0,0,0,.45); text-align:center}
+  .login-card{width:100%; max-width:340px; background:#fff; border-radius:18px; padding:34px 30px; box-shadow:0 24px 70px rgba(0,0,0,.45); text-align:center; animation:cardpop .3s var(--ease-out) both}
+  @keyframes cardpop{from{opacity:0; transform:scale(.96) translateY(8px)} to{opacity:1; transform:none}}
   .login-wheel svg{width:44px; height:44px}
-  .login-card h2{font-size:22px; color:var(--navy); margin:8px 0 4px; font-weight:800}
+  .login-card h2{font-size:22px; color:var(--navy); margin:8px 0 4px; font-weight:600; letter-spacing:-.3px}
   .login-card p{font-size:13px; color:var(--muted); margin-bottom:18px}
   .login-card input{width:100%; border:1px solid var(--line); border-radius:10px; padding:11px 13px; font-size:15px; margin-bottom:12px; text-align:center}
   .login-card input:focus{outline:none; border-color:var(--steel); box-shadow:0 0 0 3px rgba(61,106,146,.14)}
   .login-card .btn{width:100%; justify-content:center}
   #login-err{color:#c0392b; font-size:12px; margin-top:12px; opacity:0; transition:.2s; min-height:14px}
+  /* touch devices: don't leave hover-transforms stuck after a tap */
+  @media (hover:none){ .statcard:hover{transform:none} }
+  @media (prefers-reduced-motion:reduce){
+    .statcard:hover,.vcard:hover,.legrow:hover,.btn:active,.icb:active,.mini-btn:active,#nav button:active{transform:none !important}
+    .login-card{animation:none}
+  }
   .login-link{display:inline-block; margin-top:12px; font-size:12px; color:var(--steel); text-decoration:none}
   .login-link:hover{text-decoration:underline}
   #setpw{position:fixed; inset:0; z-index:4000; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#08213a,#123a5c)}
@@ -93,20 +104,20 @@
   .cat-empty .ce-ic{font-size:40px; opacity:.45}
   .cat-empty .ce-t{font-size:18px; font-weight:700; color:var(--navy); margin-top:12px}
   .cat-empty .ce-s{font-size:13px; margin-top:6px; max-width:420px; margin-left:auto; margin-right:auto}
-  .vcard{position:relative; display:flex; background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 6px 22px rgba(11,41,66,.07); margin-bottom:18px; transition:box-shadow .15s, transform .15s}
-  .vcard:hover{box-shadow:0 12px 32px rgba(11,41,66,.13)}
-  .vcard-accent{width:6px; flex:none; background:linear-gradient(180deg,var(--steel),var(--sky))}
-  .vcard.unassigned .vcard-accent{background:var(--line)}
-  .vcard-body{flex:1; padding:20px 24px; min-width:0}
+  .vcard{position:relative; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 18px rgba(11,41,66,.06); margin-bottom:18px; transition:box-shadow .15s, transform .15s}
+  .vcard:hover{box-shadow:0 12px 30px rgba(11,41,66,.12)}
+  .vcard.unassigned{background:#fbfcfd}
+  .vcard-body{padding:22px 24px; min-width:0}
   .vcard-top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px}
-  .vcard-name{font-size:21px; font-weight:800; color:var(--navy); letter-spacing:-.3px}
+  .vcard-eyebrow{font-size:11px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; color:var(--steel); margin-bottom:6px}
+  .vcard-name{font-size:20px; font-weight:600; color:var(--navy); letter-spacing:-.3px; line-height:1.15}
   .vcard-date{font-size:12px; color:var(--muted); margin-top:3px; letter-spacing:.2px}
   .vcard-actions{display:flex; gap:6px; flex:none}
   .icb{width:34px; height:34px; border:1px solid var(--line); background:#fff; border-radius:10px; cursor:pointer; font-size:15px; color:var(--steel); display:flex; align-items:center; justify-content:center; transition:.12s}
   .icb:hover{background:var(--foam); color:var(--navy)}
   .icb.danger:hover{background:#fbecea; color:#c0392b; border-color:#e6c3bd}
   .vcard-stats{display:flex; gap:34px; margin:16px 0 6px; padding:14px 2px; border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
-  .vs-v{font-size:21px; font-weight:800; color:var(--navy); line-height:1}
+  .vs-v{font-size:21px; font-weight:700; color:var(--navy); line-height:1; letter-spacing:-.4px}
   .vs-v em{font-size:12px; font-weight:600; color:var(--muted); font-style:normal; margin-left:3px}
   .vs-k{font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-top:5px}
   .leglist{list-style:none; margin:10px 0 0; padding:0}
@@ -151,21 +162,21 @@
   #map{position:absolute; inset:0}
   .leaflet-container{background:#c9dced}
 
-  #stats{position:absolute; top:14px; left:14px; z-index:600; width:272px; background:rgba(255,255,255,.96); backdrop-filter:blur(6px); border-radius:14px; box-shadow:0 8px 30px rgba(11,41,66,.22); overflow:hidden; border:1px solid var(--line)}
+  #stats{position:absolute; top:14px; left:14px; z-index:600; width:272px; background:rgba(255,255,255,.82); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%); border-radius:16px; box-shadow:0 10px 34px rgba(11,41,66,.25); overflow:hidden; border:1px solid rgba(255,255,255,.55)}
   #stats.hidden{display:none}
   .st-head{background:linear-gradient(90deg,var(--navy),var(--steel)); color:#fff; padding:12px 15px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px}
   .st-head .t{font-size:15px; font-weight:700}
   .st-head .d{font-size:11px; color:var(--sky); margin-top:2px}
   .st-head .play{flex:none; background:rgba(255,255,255,.16); border:none; color:#fff; width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:14px; transition:.12s}
   .st-head .play:hover{background:rgba(255,255,255,.3)}
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line)}
-  .cell{background:#fff; padding:10px 14px}
-  .cell .v{font-size:19px; font-weight:700; color:var(--navy)}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(11,41,66,.10)}
+  .cell{background:transparent; padding:10px 14px}
+  .cell .v{font-size:19px; font-weight:600; color:var(--navy); letter-spacing:-.3px}
   .cell .v span{font-size:11px; font-weight:600; color:var(--muted)}
   .cell .k{font-size:10px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-top:1px}
-  .route{padding:10px 14px; background:#fff; font-size:11px; color:var(--muted); border-top:1px solid var(--line); line-height:1.5}
+  .route{padding:10px 14px; background:transparent; font-size:11px; color:var(--muted); border-top:1px solid var(--line); line-height:1.5}
   .route b{color:var(--ink); font-weight:600}
-  .thr{padding:8px 14px; font-size:11px; color:var(--muted); background:#fff; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px}
+  .thr{padding:8px 14px; font-size:11px; color:var(--muted); background:transparent; border-top:1px solid var(--line); display:flex; align-items:center; gap:8px}
   .thr input[type=range]{flex:1}
   .thr b{color:var(--navy); font-weight:700}
   #stats.multi .single-only{display:none}
@@ -176,45 +187,50 @@
   .trk-tip .tt-r span{color:#7fb3d5}
   .trk-tip .tt-r b{color:#fff; font-weight:600}
   .st-actions{display:flex; border-top:1px solid var(--line)}
-  .st-actions button{flex:1; background:#fff; border:none; padding:10px; font-size:12px; font-weight:600; color:var(--steel); cursor:pointer; transition:.12s}
+  .st-actions button{flex:1; background:transparent; border:none; padding:10px; font-size:12px; font-weight:600; color:var(--steel); cursor:pointer; transition:.12s}
   .st-actions button:hover{background:var(--foam)}
 
-  #legend{position:absolute; bottom:22px; left:14px; z-index:600; background:rgba(255,255,255,.95); border-radius:10px; padding:9px 12px; box-shadow:0 4px 16px rgba(11,41,66,.18); font-size:11px; color:var(--muted); border:1px solid var(--line)}
+  #legend{position:absolute; bottom:22px; left:14px; z-index:600; background:rgba(255,255,255,.78); backdrop-filter:blur(18px) saturate(180%); -webkit-backdrop-filter:blur(18px) saturate(180%); border-radius:12px; padding:9px 12px; box-shadow:0 6px 20px rgba(11,41,66,.2); font-size:11px; color:var(--muted); border:1px solid rgba(255,255,255,.5)}
   #legend.hidden{display:none}
   #legend .lbl{font-weight:600; color:var(--ink); margin-bottom:5px}
   .bar{height:9px; width:150px; border-radius:5px; margin-bottom:3px}
   .barlabels{display:flex; justify-content:space-between}
 
   .welcome{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:500; color:var(--muted); pointer-events:none}
-  .welcome .box{text-align:center; background:rgba(255,255,255,.9); padding:26px 34px; border-radius:16px; box-shadow:0 8px 30px rgba(11,41,66,.15)}
+  .welcome .box{text-align:center; background:rgba(255,255,255,.8); backdrop-filter:blur(18px) saturate(180%); -webkit-backdrop-filter:blur(18px) saturate(180%); padding:26px 34px; border-radius:18px; box-shadow:0 10px 34px rgba(11,41,66,.18); border:1px solid rgba(255,255,255,.5)}
   .welcome h2{color:var(--navy); font-size:18px; margin-bottom:6px}
   .welcome p{font-size:13px}
 
   /* ---------- generic content pages ---------- */
   .page{max-width:960px; margin:0 auto; padding:28px 26px 60px}
-  .page h1{font-size:22px; color:var(--navy); margin-bottom:4px}
+  .page h1{font-size:22px; font-weight:600; letter-spacing:-.4px; color:var(--navy); margin-bottom:4px}
   .page .lede{color:var(--muted); font-size:13px; margin-bottom:22px}
   .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:26px}
-  .statcard{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; box-shadow:0 2px 10px rgba(11,41,66,.05); transition:transform .15s, box-shadow .15s}
-  .statcard:hover{transform:translateY(-2px); box-shadow:0 10px 26px rgba(11,41,66,.1)}
-  .statcard .v{font-size:26px; font-weight:800; color:var(--navy); line-height:1}
+  .statcard{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 20px; box-shadow:0 4px 18px rgba(11,41,66,.06); transition:transform .15s, box-shadow .15s}
+  .statcard:hover{transform:translateY(-2px); box-shadow:0 12px 30px rgba(11,41,66,.12)}
+  .statcard .v{font-size:26px; font-weight:700; color:var(--navy); line-height:1; letter-spacing:-.6px}
   .statcard .v span{font-size:13px; font-weight:600; color:var(--muted)}
   .statcard .k{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-top:6px}
   .statcard.accent{background:linear-gradient(135deg,var(--navy),var(--steel)); border:none}
   .statcard.accent .v{color:#fff} .statcard.accent .v span{color:var(--sky)} .statcard.accent .k{color:var(--sky)}
-  .section{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:20px; box-shadow:0 2px 10px rgba(11,41,66,.05)}
-  .section h2{font-size:15px; color:var(--navy); margin-bottom:14px; display:flex; align-items:center; gap:8px}
+  .section{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 24px; margin-bottom:20px; box-shadow:0 4px 18px rgba(11,41,66,.06)}
+  .section h2{font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--steel); font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:9px}
+  .section h2::before{content:""; width:3px; height:14px; border-radius:2px; background:linear-gradient(180deg,var(--steel),var(--sky)); flex:none}
+  .pagehead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:22px; flex-wrap:wrap}
+  .pagehead h1{margin:0}
+  .pagehead .lede{margin:3px 0 0}
   .records{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px}
   .record{display:flex; flex-direction:column; gap:2px}
   .record .rk{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
   .record .rv{font-size:15px; font-weight:700; color:var(--ink)}
   .record .rs{font-size:11px; color:var(--muted)}
   #dashMap{height:340px; border-radius:12px; overflow:hidden; border:1px solid var(--line)}
-  #dashHero{position:relative; height:180px; overflow:hidden; background:linear-gradient(120deg,#08213a 0%,#123a5c 55%,#2b6086 100%)}
+  #dashHero{position:relative; height:172px; max-width:960px; margin:24px auto 0; border-radius:16px; overflow:hidden; background:linear-gradient(120deg,#08213a 0%,#123a5c 55%,#2b6086 100%); box-shadow:0 8px 26px rgba(11,41,66,.14)}
+  #view-dashboard .page{padding-top:18px}
   #heroCanvas{position:absolute; inset:0; width:100%; height:100%; display:block}
-  .hero-overlay{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 max(26px,calc(50% - 480px + 26px)); pointer-events:none}
+  .hero-overlay{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:0 30px; pointer-events:none}
   .hero-eyebrow{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--sky); opacity:.85}
-  .hero-title{font-size:30px; font-weight:800; color:#fff; letter-spacing:-.5px; margin-top:4px; text-shadow:0 2px 18px rgba(0,0,0,.35)}
+  .hero-title{font-size:28px; font-weight:600; color:#fff; letter-spacing:-.6px; margin-top:4px; text-shadow:0 2px 18px rgba(0,0,0,.3)}
   .hero-sub{font-size:13px; color:#cfe4f2; margin-top:3px}
 
   /* forms */
@@ -232,6 +248,9 @@
   .btn.danger{background:transparent; color:#c0392b; border:1px solid #e6c3bd}
   .btn.danger:hover{background:#fbecea}
   .btn.sm{padding:6px 12px; font-size:12px}
+  /* motion polish (Emil Kowalski's rules): press feedback + strong ease-out */
+  .btn,.icb,.mini-btn,#nav button,#logoutBtn,.lh-actions button,.st-actions button,.play{transition:transform .14s var(--ease-out), background-color .14s ease, color .14s ease, box-shadow .14s ease, border-color .14s ease}
+  .btn:active,.icb:active,.mini-btn:active,#nav button:active,#logoutBtn:active,.lh-actions button:active,.st-actions button:active,.play:active{transform:scale(.96)}
   .btnrow{display:flex; gap:10px; margin-top:16px; align-items:center}
   .saved{color:var(--ok); font-size:12px; opacity:0; transition:.2s}
   .saved.show{opacity:1}
@@ -254,9 +273,10 @@
   .rowbtns button:hover{background:var(--line); color:var(--ink)}
 
   /* modal */
-  #modal{position:fixed; inset:0; z-index:2000; background:rgba(11,41,66,.5); display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto}
+  #modal{position:fixed; inset:0; z-index:2000; background:rgba(11,41,66,.42); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:none; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto}
   #modal.open{display:flex}
-  .modal-box{background:#fff; border-radius:16px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(11,41,66,.4); overflow:hidden}
+  .modal-box{background:#fff; border-radius:16px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(11,41,66,.4); overflow:hidden; transform:scale(.96); opacity:0; transition:transform .2s var(--ease-out), opacity .2s ease}
+  #modal.open .modal-box{transform:scale(1); opacity:1}
   .modal-head{padding:16px 20px; background:linear-gradient(90deg,var(--navy),var(--steel)); color:#fff; display:flex; justify-content:space-between; align-items:center}
   .modal-head h3{font-size:16px}
   .modal-head button{background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer; line-height:1}
@@ -277,17 +297,66 @@
   .spec .s .sk{font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
   .spec .s .sv{font-size:15px; font-weight:600; color:var(--ink)}
   .br-stats{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; text-align:center}
-  .br-stats .bs .v{font-size:24px; font-weight:800; color:var(--navy)}
+  .br-stats .bs .v{font-size:24px; font-weight:700; color:var(--navy); letter-spacing:-.4px}
   .br-stats .bs .k{font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted)}
   .br-gallery{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
   .br-gallery img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:8px}
   .br-toolbar{max-width:820px; margin:0 auto 16px; display:flex; justify-content:flex-end; gap:10px}
   .muted{color:var(--muted); font-size:13px}
 
+  /* ---------- tablet & mobile ---------- */
+  @media (max-width:900px){
+    #topbar{gap:6px; padding:0 10px}
+    #topbar .brand{font-size:0; gap:0}            /* keep the wheel, drop the wordmark to save room */
+    #nav{margin-left:2px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+    #nav::-webkit-scrollbar{display:none}
+    #nav button{padding:8px 11px; font-size:13px; white-space:nowrap}
+    #boatname{display:none}
+    #dashHero{margin:14px 14px 0; border-radius:14px; height:150px}
+    .hero-title{font-size:24px}
+    .hero-overlay{padding:0 22px}
+    .page{padding:22px 16px 56px}
+    .cat-head, .pagehead{gap:12px}
+    .cards{grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px}
+    #dashMap{height:280px}
+  }
   @media (max-width:760px){
-    #view-voyages{grid-template-columns:1fr; grid-template-rows:auto 1fr}
-    .form-grid,.br-stats{grid-template-columns:1fr 1fr}
-    #nav button{padding:8px 9px; font-size:12px}
+    /* Map view: stack list over map, each gets real height */
+    #view-voyages{grid-template-columns:1fr; grid-template-rows:minmax(0,40vh) minmax(0,60vh)}
+    #sidebar{border-right:none; border-bottom:1px solid rgba(0,0,0,.2)}
+    #stats{width:calc(100% - 28px); max-height:56%; overflow:auto}
+    /* forms & spec grids to one column */
+    .form-grid{grid-template-columns:1fr}
+    .br-stats{grid-template-columns:1fr 1fr}
+    .spec{grid-template-columns:1fr 1fr}
+    .br-gallery{grid-template-columns:1fr 1fr}
+    .br-body{padding:22px 20px}
+    .br-hero{padding:24px 22px}
+    .br-hero .heropic{height:200px}
+    .vcard-body{padding:18px 16px}
+    .vcard-name{font-size:19px}
+    .vcard-stats{gap:18px 22px; flex-wrap:wrap}
+    /* bigger touch targets */
+    .icb{width:40px; height:40px; font-size:16px}
+    .btn{padding:11px 16px}
+    /* maintenance table scrolls instead of squashing */
+    table.log{display:block; overflow-x:auto; white-space:nowrap}
+  }
+  @media (max-width:420px){
+    .br-stats{grid-template-columns:1fr 1fr}
+    .cards{grid-template-columns:1fr 1fr}
+    .legstats span:first-child{font-size:13px}
+    .vcard-stats{gap:14px 18px}
+  }
+  /* Apple accessibility signals: make glass solid when the user asks for it */
+  @media (prefers-reduced-transparency: reduce){
+    #stats,#legend,.welcome .box{background:#fff !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; border-color:var(--line) !important}
+    .cell,.route,.thr,.st-actions button{background:#fff}
+    .grid{background:var(--line)}
+    #modal{backdrop-filter:none !important; -webkit-backdrop-filter:none !important; background:rgba(11,41,66,.6)}
+  }
+  @media (prefers-contrast: more){
+    .statcard,.section,.vcard,.field input,.field textarea,.field select{border-color:var(--steel)}
   }
   /* print */
   @media print{
@@ -960,7 +1029,7 @@ function animateView(name){
   if(!hasGSAP()) return;
   const root=document.getElementById("view-"+name); if(!root) return;
   const els=root.querySelectorAll(".statcard,.vcard,.cat-empty,#dashMap,.records .record");
-  if(els.length) gsap.fromTo(els,{opacity:0,y:18},{opacity:1,y:0,duration:.55,stagger:.05,ease:"power3.out",overwrite:true,clearProps:"opacity,transform"});
+  if(els.length) gsap.fromTo(els,{opacity:0,y:18},{opacity:1,y:0,duration:.45,stagger:.05,ease:"power4.out",overwrite:true,clearProps:"opacity,transform"});
 }
 function countUp(root){
   root.querySelectorAll("[data-count]").forEach(el=>{
@@ -1038,10 +1107,9 @@ function renderCatalog(){
       const ag=aggStats(legs);
       const range=ag.start!=null?`${fmtDateShort(ag.start)} – ${fmtDateShort(ag.end)}`:"—";
       html+=`<div class="vcard" data-vid="${v.id}">
-        <div class="vcard-accent"></div>
         <div class="vcard-body">
           <div class="vcard-top">
-            <div><div class="vcard-name">${esc(v.name)}</div><div class="vcard-date">${range}</div></div>
+            <div><div class="vcard-eyebrow">${range}</div><div class="vcard-name">${esc(v.name)}</div></div>
             <div class="vcard-actions">
               <button class="icb" data-open="${v.id}" title="Open on map">🗺</button>
               <button class="icb" data-ren="${v.id}" title="Rename">✎</button>
@@ -1061,7 +1129,6 @@ function renderCatalog(){
   }
   const un=trips.filter(t=>!t.voyageId||!voyages.some(v=>v.id===t.voyageId));
   if(un.length){ html+=`<div class="vcard unassigned" data-vid="">
-    <div class="vcard-accent"></div>
     <div class="vcard-body">
       <div class="vcard-top"><div><div class="vcard-name">Unassigned</div><div class="vcard-date">${un.length} leg${un.length>1?"s":""} not in a voyage — drag them onto a voyage above</div></div></div>
       <ul class="leglist">${un.slice().sort((a,b)=>a.dateMs-b.dateMs).map((l,i)=>{const parts=(l.summary||"").split(" · ");return `<li class="legrow" draggable="true" data-leg="${l.id}"><span class="grip">⠿</span><span class="legno">${i+1}</span><div class="leginfo"><div class="legname">${esc(l.name)}</div><div class="legdate">${fmtDateShort(l.dateMs)}</div></div><div class="legstats"><span>${parts[0]||""}</span><span>${parts[1]||""}</span></div></li>`;}).join("")}</ul>
@@ -1102,12 +1169,12 @@ function renderDashboard(){
     const inner = c.text!=null ? c.text : `<span data-count="${Math.round(c.num)}">0</span>${c.unit?` <span>${c.unit}</span>`:""}`;
     return `<div class="statcard ${c.accent?"accent":""}"><div class="v">${inner}</div><div class="k">${c.k}</div></div>`;
   }).join("")}</div>`;
-  html+=`<div class="section"><h2>⚓ Records</h2><div class="records">
+  html+=`<div class="section"><h2>Records</h2><div class="records">
     <div class="record"><span class="rk">Longest passage</span><span class="rv">${f.longest?f.longest.dist.toFixed(1)+" nm":"—"}</span><span class="rs">${f.longest?esc(f.longest.name)+" · "+fmtDateShort(f.longest.dateMs):""}</span></div>
     <div class="record"><span class="rk">Fastest average</span><span class="rv">${f.fastest?f.fastest.avg.toFixed(1)+" kn":"—"}</span><span class="rs">${f.fastest?esc(f.fastest.name)+" · "+fmtDateShort(f.fastest.dateMs):""}</span></div>
     <div class="record"><span class="rk">Avg trip length</span><span class="rv">${f.trips?(f.dist/f.trips).toFixed(1)+" nm":"—"}</span><span class="rs">across ${f.trips} voyages</span></div>
   </div></div>`;
-  html+=`<div class="section"><h2>🗺 Cruising map</h2><div id="dashMap"></div></div>`;
+  html+=`<div class="section"><h2>Cruising map</h2><div id="dashMap"></div></div>`;
   document.getElementById("dashPage").innerHTML=html;
   countUp(document.getElementById("dashPage"));
   // cruising map
@@ -1126,7 +1193,7 @@ function renderDashboard(){
 const BOAT_FIELDS=[["name","Boat name"],["make","Make / builder"],["model","Model"],["year","Year"],["loa","Length overall (LOA)"],["beam","Beam"],["draft","Draft"],["sailplan","Sail plan"],["engine","Engine"],["engineTotal","Engine hours (total)"],["hullId","Hull ID / HIN"],["flag","Home port / flag"]];
 function renderBoat(){
   const b=boat;
-  let html=`<h1>Boat profile</h1><div class="lede">The spec sheet buyers will see on the brochure.</div><div class="section">`;
+  let html=`<div class="pagehead"><div><h1>Boat profile</h1><div class="lede">The spec sheet buyers will see on the brochure.</div></div></div><div class="section">`;
   html+=`<div class="field full" style="margin-bottom:16px"><label>Hero photo</label><input id="b-hero" type="file" accept="image/*"><div class="gallery" id="b-herowrap" style="grid-template-columns:220px"></div></div>`;
   html+=`<div class="form-grid">`;
   BOAT_FIELDS.forEach(([k,lab])=>{ html+=`<div class="field"><label>${lab}</label><input id="b-${k}" value="${esc(b[k]||"")}"></div>`; });
@@ -1152,8 +1219,7 @@ function renderBoat(){
 const MAINT_CATS=["Engine","Rigging","Sails","Hull","Electrical","Plumbing","Safety","Other"];
 function renderMaintenance(){
   const rows=maint.slice().sort((a,b)=>b.dateMs-a.dateMs);
-  let html=`<h1>Maintenance log</h1><div class="lede">Service history — often the first thing a serious buyer asks for.</div>`;
-  html+=`<div class="btnrow" style="margin:0 0 16px"><button class="btn" id="m-add">+ Add record</button></div>`;
+  let html=`<div class="pagehead"><div><h1>Maintenance log</h1><div class="lede">Service history, often the first thing a serious buyer asks for.</div></div><button class="btn" id="m-add">+ Add record</button></div>`;
   html+=`<div class="section">`;
   if(!rows.length){ html+=`<div class="muted">No records yet. Add oil changes, new sails, rigging work, surveys…</div>`; }
   else{
